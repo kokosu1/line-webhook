@@ -36,7 +36,7 @@ async def webhook(request: Request):
                 "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"
             }
             payload = {
-                "replyToken": reply_token,
+                "replyToken"6aa790db01534e50a3d7d1d95a88f758
                 "messages": [{"type": "text", "text": message}]
             }
             await client.post(reply_url, headers=headers, json=payload)
