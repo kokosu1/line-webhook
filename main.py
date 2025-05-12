@@ -1,38 +1,50 @@
 import requests
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, Request
 
 app = FastAPI()
 
-# OpenWeatherMap APIキー（自分のAPIキーに置き換えてください）
 API_KEY = 'dd9f6e2b4116d6c124be61d261da444e'
 
-class WebhookData(BaseModel):
-    type: str
-    text: str
-
 @app.post("/webhook")
-async def webhook(data: WebhookData):
-    user_message = data.text.strip()  # ユーザーから送られたメッセージを取得
+async def webhook(request: Request):
+    body = await request.json()
+    events = body.get("events", [])
 
-    if "天気" in user_message:
-        # ユーザーが「天気」と言った場合、天気情報を取得
-        city = "Tokyo"  # デフォルトで東京を設定（必要に応じて変更）
-        weather_info = get_weather(city)
-        return {"status": "success", "weather": weather_info}
-    else:
-        return {"status": "failure", "message": "天気情報をリクエストしてください。"}
+    for event in events:
+        if event["type"] == "message" and event["message"]["type"] == "text":
+            message_text = event["message"]["text"].strip()
+            reply_token = event["replyToken"]
+
+            if "天気" in message_text:
+                city = "東京"
+                weather_message = get_weather(city)
+                send_line_reply(reply_token, weather_message)
+
+    return {"status": "ok"}
 
 def get_weather(city: str):
-    # OpenWeatherMap APIを使って天気情報を取得
+    if city == "東京":
+        city = "Tokyo"
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric&lang=ja"
-    response = requests.get(url)
-    data = response.json()
-
-    if response.status_code == 200:
-        # 天気情報が正常に取得できた場合
-        weather = data['weather'][0]['description']
-        temp = data['main']['temp']
-        return f"現在の天気は {weather} で、気温は {temp}°C です。"
+    res = requests.get(url)
+    if res.status_code == 200:
+        data = res.json()
+        weather = data["weather"][0]["description"]
+        temp = data["main"]["temp"]
+        return f"{city}の天気は「{weather}」、気温は{temp}℃です。"
     else:
         return "天気情報の取得に失敗しました。"
+
+def send_line_reply(reply_token, message):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"BearerlJvik2q3NiM1xeKywUqpIQto4FSQMPxgEgnOKz272jtk3ZBcux/7IOEjdgb4W12MDycIMoxnULp4xIHJ4xAbk4X7iSuvtKHFokmi4ZVaTwsN+SPHU8T+j9uXjYon6efMP68CjFi7fdVCbWOhV+8hPgdB04t89/1O/w1cDnyilFU="
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{
+            "type": "text",
+            "text": message
+        }]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
