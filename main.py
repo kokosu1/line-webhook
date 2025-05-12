@@ -8,6 +8,8 @@ API_KEY = 'dd9f6e2b4116d6c124be61d261da444e'
 # 日本の都道府県名から英名に変換する辞書（例: 東京 => Tokyo, 大阪 => Osaka）
 city_mapping = {
     "東京": "Tokyo",
+    "東京都": "Tokyo",
+    "府中市": "Fuchu,JP",
     "大阪": "Osaka",
     "名古屋": "Nagoya",
     "札幌": "Sapporo",
