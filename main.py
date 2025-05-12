@@ -5,6 +5,18 @@ app = FastAPI()
 
 API_KEY = 'dd9f6e2b4116d6c124be61d261da444e'
 
+# 日本の都道府県名から英名に変換する辞書（例: 東京 => Tokyo, 大阪 => Osaka）
+city_mapping = {
+    "東京": "Tokyo",
+    "大阪": "Osaka",
+    "名古屋": "Nagoya",
+    "札幌": "Sapporo",
+    "福岡": "Fukuoka",
+    "京都": "Kyoto",
+    "神戸": "Kobe",
+    # 追加の都市をここに追加することができます
+}
+
 @app.post("/webhook")
 async def webhook(request: Request):
     body = await request.json()
@@ -16,15 +28,23 @@ async def webhook(request: Request):
             reply_token = event["replyToken"]
 
             if "天気" in message_text:
-                city = "東京"  # デフォルトの都市を東京に設定
-                weather_message = get_weather(city)
+                city = extract_city_name(message_text)
+                if city:
+                    weather_message = get_weather(city)
+                else:
+                    weather_message = "指定された都市の天気情報が見つかりませんでした。"
                 send_line_reply(reply_token, weather_message)
 
     return {"status": "ok"}
 
+def extract_city_name(message_text: str):
+    # ユーザーのメッセージから「の天気」を除去し、都市名を抽出
+    for city in city_mapping:
+        if city in message_text:
+            return city_mapping[city]  # 都市名を英名に変換して返す
+    return None
+
 def get_weather(city: str):
-    if city == "東京":
-        city = "Tokyo"
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
     if res.status_code == 200:
@@ -32,19 +52,19 @@ def get_weather(city: str):
         weather = data["weather"][0]["main"]  # 天気の概要 (Rain, Clear, Clouds, Snow など)
         temp = int(data["main"]["temp"])  # 温度を整数に変換
 
-        # 温度の表示を変更（小数点なし）
+        # 天気の概要に応じたメッセージ
         if weather == "Clear":
-            return f"今日は晴れです！🌞 今日の気温は{temp}度です！"
+            return f"{city}の天気は晴れです！🌞 今日の気温は{temp}度です！"
         elif weather == "Rain" or weather == "Drizzle":
-            return f"今日は雨です☔ 傘を忘れずに！今日の気温は{temp}度です！"
+            return f"{city}の天気は雨です☔ 傘を忘れずに！今日の気温は{temp}度です！"
         elif weather == "Clouds":
-            return f"今日は曇りです☁️ 今日の気温は{temp}度です！"
+            return f"{city}の天気は曇りです☁️ 今日の気温は{temp}度です！"
         elif weather == "Snow":
-            return f"今日は雪が降っています❄️ 寒いので暖かくしてね！今日の気温は{temp}度です！"
+            return f"{city}の天気は雪です❄️ 寒いので暖かくしてね！今日の気温は{temp}度です！"
         else:
-            return f"今日は天気がわかりません🤔 今日の気温は{temp}度です。"
+            return f"{city}の天気がわかりません🤔 今日の気温は{temp}度です。"
     else:
-        return "天気情報の取得に失敗しました。"
+        return f"{city}の天気情報の取得に失敗しました。"
 
 def send_line_reply(reply_token, message):
     headers = {
