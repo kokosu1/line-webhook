@@ -1,7 +1,7 @@
 def send_line_reply(reply_token, message):
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer あなたのチャネルアクセストークン"
+        "Authorization": "Bearer lJvik2q3NiM1xeKywUqpIQto4FSQMPxgEgnOKz272jtk3ZBcux/7IOEjdgb4W12MDycIMoxnULp4xIHJ4xAbk4X7iSuvtKHFokmi4ZVaTwsN+SPHU8T+j9uXjYon6efMP68CjFi7fdVCbWOhV+8hPgdB04t89/1O/w1cDnyilFU="
     }
     body = {
         "replyToken": reply_token,
