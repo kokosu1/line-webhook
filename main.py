@@ -1,50 +1,43 @@
-import requests
-from fastapi import FastAPI, Request
-
-app = FastAPI()
-
-API_KEY = 'dd9f6e2b4116d6c124be61d261da444e'
-
-@app.post("/webhook")
-async def webhook(request: Request):
-    body = await request.json()
-    events = body.get("events", [])
-
-    for event in events:
-        if event["type"] == "message" and event["message"]["type"] == "text":
-            message_text = event["message"]["text"].strip()
-            reply_token = event["replyToken"]
-
-            if "天気" in message_text:
-                city = "東京"
-                weather_message = get_weather(city)
-                send_line_reply(reply_token, weather_message)
-
-    return {"status": "ok"}
-
 def get_weather(city: str):
-    if city == "東京":
-        city = "Tokyo"
+    city_map = {
+        "東京": "Tokyo",
+        "大阪": "Osaka",
+        "名古屋": "Nagoya",
+        "福岡": "Fukuoka",
+        "札幌": "Sapporo",
+        "横浜": "Yokohama"
+    }
+
+    for jp, en in city_map.items():
+        if jp in city:
+            city = en
+            break
+
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
+
     if res.status_code == 200:
         data = res.json()
         weather = data["weather"][0]["description"]
         temp = data["main"]["temp"]
-        return f"{city}の天気は「{weather}」、気温は{temp}℃です。"
-    else:
-        return "天気情報の取得に失敗しました。"
 
-def send_line_reply(reply_token, message):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer lJvik2q3NiM1xeKywUqpIQto4FSQMPxgEgnOKz272jtk3ZBcux/7IOEjdgb4W12MDycIMoxnULp4xIHJ4xAbk4X7iSuvtKHFokmi4ZVaTwsN+SPHU8T+j9uXjYon6efMP68CjFi7fdVCbWOhV+8hPgdB04t89/1O/w1cDnyilFU="
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{
-            "type": "text",
-            "text": message
-        }]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+        # 判定して変える
+        if "晴" in weather or "sun" in weather:
+            message = f"{city}は晴れてるよ！気温は{temp}℃だよ♪\nいいお天気〜おでかけしよう！"
+            sticker = ("11537", "52002734")
+        elif "曇" in weather or "cloud" in weather:
+            message = f"{city}はくもりだよ〜！気温は{temp}℃。\nちょっと暗いけど元気出してねっ！"
+            sticker = ("11537", "52002740")
+        elif "雨" in weather or "rain" in weather:
+            message = f"{city}は雨だよ…気温は{temp}℃！\n傘忘れないでね☂️"
+            sticker = ("11537", "52002745")
+        elif "雪" in weather or "snow" in weather:
+            message = f"{city}は雪が降ってるみたい！気温は{temp}℃だよ〜！\nあったかくしてね！"
+            sticker = ("11537", "52002750")
+        else:
+            message = f"{city}の天気は「{weather}」、気温は{temp}℃だよ！"
+            sticker = (None, None)
+
+        return message, sticker[0], sticker[1]
+    else:
+        return "天気情報が見つからなかったみたい…ごめんね！", None, None
