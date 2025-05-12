@@ -38,17 +38,17 @@ def get_weather(city: str):
         
         # 天気によってメッセージを変える
         if "clear" in weather:
-            return f"{city}の天気は晴れです！気温は{temp}℃です。今日も元気に過ごしてね！"
+            return f"{city}の天気は晴れです！\n気温は{temp}℃、とてもいい天気ですね☀️お出かけ日和です！"
         elif "cloud" in weather:
-            return f"{city}の天気は曇りです。気温は{temp}℃。お天気はちょっと曇りですが、頑張りましょう！"
+            return f"{city}の天気は曇りです。\n気温は{temp}℃、少し曇りですが、お散歩にちょうど良い感じですね🌥"
         elif "rain" in weather or "小雨" in weather:  # 雨と小雨は同じメッセージを送る
-            return f"{city}の天気は雨（または小雨）です。気温は{temp}℃。お出かけの際は傘を忘れずに！"
+            return f"{city}の天気は雨（または小雨）です🌧️\n気温は{temp}℃、お出かけの際は傘を忘れずに！☂️"
         elif "snow" in weather:
-            return f"{city}の天気は雪です！気温は{temp}℃。寒いので暖かくしてね。"
+            return f"{city}の天気は雪です！❄️\n気温は{temp}℃、寒いので暖かくしてね💖"
         else:
-            return f"{city}の天気は「{weather}」、気温は{temp}℃です。"
+            return f"{city}の天気は「{weather}」です。\n気温は{temp}℃。今日も元気に頑張りましょうね！"
     else:
-        return "天気情報の取得に失敗しました。"
+        return "天気情報の取得に失敗しました。もう一度お試しくださいね😢"
 
 # LINEに返信メッセージを送信する関数
 def send_line_reply(reply_token, message):
