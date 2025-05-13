@@ -35,15 +35,20 @@ async def webhook(request: Request):
 
         # POSTBACK処理（ボタンが押された時）
         if event["type"] == "postback":
-            data = event["postback"]["data"]
-            if user_mode.get(user_id) == "janken":
-                user_choice = data
-                choices = ["グー", "チョキ", "パー"]
-                bot_choice = random.choice(choices)
-                result = determine_janken_result(user_choice, bot_choice)
-                send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
-                user_mode[user_id] = None
-            return {"status": "ok"}
+    data = event["postback"]["data"]
+    if user_mode.get(user_id) == "janken":
+        user_choice = data
+        choices = ["グー", "チョキ", "パー"]
+
+        while True:
+            bot_choice = random.choice(choices)
+            result = determine_janken_result(user_choice, bot_choice)
+            if result != "引き分け":
+                break  # 勝敗がつくまでループ
+
+        send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
+        user_mode[user_id] = None
+        return {"status": "ok"}
 
         # 通常のテキストメッセージ処理
         if event["type"] == "message" and event["message"]["type"] == "text":
