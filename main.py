@@ -5,6 +5,7 @@ import json
 import logging
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
+import random
 
 load_dotenv()
 
@@ -40,6 +41,11 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
+            # 支出機能の案内
+            if text == "支出":
+                send_line_reply(reply_token, "支出を記録します。例: 支出 食費 1000円")
+                continue
+
             # 支出の記録または削除
             if text.startswith("支出"):
                 result = handle_expense(user_id, text)
@@ -50,9 +56,13 @@ async def webhook(request: Request):
                 result = generate_report(user_id)
                 send_line_reply(reply_token, result)
 
-            # PayPayリンク自動検知
-            elif text.lower().startswith("paypay"):
-                result = handle_paypay_link(user_id, text)
+            # じゃんけん機能
+            elif text == "じゃんけん":
+                send_line_reply(reply_token, "じゃんけんを始めます！\n「グー」、「チョキ」、「パー」のいずれかを入力してください。")
+
+            # ユーザーのじゃんけん入力に対する応答
+            elif text in ["グー", "チョキ", "パー"]:
+                result = janken_game(text)
                 send_line_reply(reply_token, result)
 
             else:
@@ -65,6 +75,23 @@ async def webhook(request: Request):
             send_line_reply(reply_token, message)
 
     return {"status": "ok"}
+
+def janken_game(user_choice):
+    """ じゃんけんの結果を判定する関数 """
+    choices = ["グー", "チョキ", "パー"]
+    bot_choice = random.choice(choices)
+    
+    # 勝敗の判定
+    if user_choice == bot_choice:
+        result = "あいこだよ！"
+    elif (user_choice == "グー" and bot_choice == "チョキ") or \
+         (user_choice == "チョキ" and bot_choice == "パー") or \
+         (user_choice == "パー" and bot_choice == "グー"):
+        result = f"あなたの勝ち！私は{bot_choice}を出しました。"
+    else:
+        result = f"あなたの負け！私は{bot_choice}を出しました。"
+    
+    return result
 
 def handle_expense(user_id, text):
     """ 支出の記録や削除を行う関数 """
@@ -116,12 +143,6 @@ def generate_report(user_id):
     logging.debug(f"レポート生成: {report} (user_id: {user_id})")  # ログ追加
     return report
 
-def handle_paypay_link(user_id, text):
-    """ PayPayリンクの自動受け取りを検知する関数 """
-    if "paypay" in text.lower():
-        return "現在、PayPayの自動受け取り機能は製作中です。完成までお待ちください。"
-    return "PayPayリンクは無効です。"
-
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -160,10 +181,4 @@ def send_line_reply(reply_token, message):
     url = "https://api.line.me/v2/bot/message/reply"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": message}]
-    }
-    requests.post(url, headers=headers, json=payload)
+        "Authorization": f"Bearer
