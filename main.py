@@ -149,6 +149,15 @@ def determine_janken_result(user_choice, bot_choice):
         return "あなたの負け…"
 
 # PayPay自動受け取り
+# PayPayリンク自動検出
+def detect_paypay_link(text):
+    paypay_link_pattern = r'https://paypay.ne.jp/.*'
+    match = re.search(paypay_link_pattern, text)
+    if match:
+        return match.group(0)
+    return None
+
+# PayPay自動受け取り
 def auto_receive_paypay(link):
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
@@ -170,10 +179,14 @@ def auto_receive_paypay(link):
 
     try:
         response = requests.post("https://api.paypay.ne.jp/v2/sendMoney/receive", headers=headers)
+        
+        # レスポンスの状態をログに出力
+        print(f"PayPay API Response: {response.status_code} - {response.text}")
+        
         if response.status_code == 200:
             return "PayPay受け取り成功！"
         else:
-            return f"PayPay受け取り失敗: {response.status_code}"
+            return f"PayPay受け取り失敗: {response.status_code} - {response.text}"
     except Exception as e:
         return f"エラーが発生しました: {str(e)}"
 
