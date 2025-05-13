@@ -41,10 +41,15 @@ async def webhook(request: Request):
                 user_mode[user_id] = "chatgpt"
                 send_line_reply(reply_token, "ChatGPTモードに切り替えたよ！質問してね。")
             elif "天気" in text:
+                # ユーザーにどこの天気を知りたいかを尋ねる
                 user_mode[user_id] = "weather"
+                send_line_reply(reply_token, "どこの天気予報を知りたいですか？例: 東京")
+            elif user_mode.get(user_id) == "weather":
+                # ユーザーが場所を送信したら天気情報を送る
                 city = detect_city(text)
                 weather_message = get_weather(city)
                 send_line_reply(reply_token, weather_message)
+                user_mode[user_id] = None  # 天気情報を送った後、モードをリセット
             elif user_mode.get(user_id) == "chatgpt":
                 answer = ask_chatgpt(text)
                 send_line_reply(reply_token, answer)
@@ -54,10 +59,11 @@ async def webhook(request: Request):
     return {"status": "ok"}
 
 def detect_city(text):
+    # ユーザーが送ったテキストから都市名を検出
     for jp_name in city_mapping:
         if jp_name in text:
             return city_mapping[jp_name]
-    return "Tokyo"
+    return "Tokyo"  # 都市が見つからなかった場合はデフォルトで東京を返す
 
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
