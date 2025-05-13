@@ -43,9 +43,9 @@ async def webhook(request: Request):
             elif "天気" in text:
                 # ユーザーにどこの天気を知りたいかを尋ねる
                 user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "どこの天気予報を知りたいですか？例: 東京")
+                send_line_reply(reply_token, "どこの天気予報を知りたいですか？例えば「東京」や「大阪」と教えてね。")
             elif user_mode.get(user_id) == "weather":
-                # ユーザーが場所を送信したら天気情報を送る
+                # ユーザーが都市名を送信したら天気情報を送る
                 city = detect_city(text)
                 weather_message = get_weather(city)
                 send_line_reply(reply_token, weather_message)
