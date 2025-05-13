@@ -1,5 +1,6 @@
 import os
 import re
+import random
 import requests
 import json
 import logging
@@ -40,14 +41,24 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 支出の記録
+            # 支出の記録または削除
             if text.startswith("支出"):
-                result = record_expense(user_id, text)
+                result = handle_expense(user_id, text)
                 send_line_reply(reply_token, result)
 
             # レポート
             elif text == "レポート":
                 result = generate_report(user_id)
+                send_line_reply(reply_token, result)
+
+            # じゃんけん
+            elif text == "じゃんけん":
+                result = play_janken()
+                send_line_reply(reply_token, result)
+
+            # PayPayリンクを受け取って支払いを行う
+            elif "paypay.me" in text:
+                result = handle_paypay_link(user_id, text)
                 send_line_reply(reply_token, result)
 
             else:
@@ -61,8 +72,9 @@ async def webhook(request: Request):
 
     return {"status": "ok"}
 
-def record_expense(user_id, text):
-    """ 支出の記録を行う関数 """
+def handle_expense(user_id, text):
+    """ 支出の記録や削除を行う関数 """
+    # 支出の記録
     match = re.match(r"支出 (\S+) (\d+)円", text)
     if match:
         category = match.group(1)
@@ -76,7 +88,24 @@ def record_expense(user_id, text):
             expenses[user_id][category] = amount
         return f"{category}に{amount}円を追加しました。"
 
-    return "支出のフォーマットが間違っています。例: 支出 食費 1000円"
+    # 支出の削除
+    match_delete = re.match(r"支出 (\S+) (\d+)円 削除", text)
+    if match_delete:
+        category = match_delete.group(1)
+        amount = int(match_delete.group(2))
+        if user_id in expenses and category in expenses[user_id]:
+            if expenses[user_id][category] >= amount:
+                expenses[user_id][category] -= amount
+                if expenses[user_id][category] == 0:
+                    del expenses[user_id][category]
+                logging.debug(f"削除: {category} - {amount}円 (user_id: {user_id})")  # ログ追加
+                return f"{category}から{amount}円を削除しました。"
+            else:
+                return f"{category}の支出額が不足しています。削除できません。"
+        else:
+            return f"{category}は記録されていません。削除できません。"
+
+    return "支出のフォーマットが間違っています。例: 支出 食費 1000円 または 支出 食費 1000円 削除"
 
 def generate_report(user_id):
     """ 支出レポートを生成する関数 """
@@ -138,3 +167,66 @@ def send_line_reply(reply_token, message):
         "messages": [{"type": "text", "text": message}]
     }
     requests.post(url, headers=headers, json=payload)
+
+# じゃんけん機能
+def play_janken():
+    choices = ["グー", "チョキ", "パー"]
+    user_choice = random.choice(choices)
+    bot_choice = random.choice(choices)
+
+    if user_choice == bot_choice:
+        return f"あなたの出した手: {user_choice}\n私の出した手: {bot_choice}\n引き分け！"
+    
+    if (user_choice == "グー" and bot_choice == "チョキ") or \
+       (user_choice == "チョキ" and bot_choice == "パー") or \
+       (user_choice == "パー" and bot_choice == "グー"):
+        return f"あなたの出した手: {user_choice}\n私の出した手: {bot_choice}\nあなたの勝ち！"
+    
+    return f"あなたの出した手: {user_choice}\n私の出した手: {bot_choice}\n私の勝ち！"
+
+# PayPayリンク処理
+def handle_paypay_link(user_id, text):
+    # PayPayリンクから送金リクエストを処理する部分を追加
+    # ここで受け取ったリンクを解析して処理
+    logging.debug(f"PayPayリンク受信: {text} (user_id: {user_id})")  # ログ追加
+    # 必要に応じて、PayPayのAPIを呼び出して受け取り処理を行う
+    return "PayPayリンクを受け取りました。処理を進めます..."
+
+# リッチメニューを作成する関数
+def create_rich_menu():
+    # リッチメニューの画像をLINEにアップロード
+    url = "https://api-data.line.me/v2/bot/richmenu"
+    headers = {
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "size": {
+            "width": 2500,
+            "height": 1686
+        },
+        "selected": False,
+        "name": "Main Menu",
+        "chatBarText": "Tap here",
+        "areas": [
+            {
+                "bounds": {"x": 0, "y": 0, "width": 833, "height": 843},
+                "action": {"type": "message", "text": "じゃんけん"}
+            },
+            {
+                "bounds": {"x": 833, "y": 0, "width": 833, "height": 843},
+                "action": {"type": "message", "text": "レポート"}
+            },
+            {
+                "bounds": {"x": 1666, "y": 0, "width": 834, "height": 843},
+                "action": {"type": "message", "text": "支出"}
+            }
+        ]
+    }
+
+    res = requests.post(url, headers=headers, json=payload)
+    if res.status_code == 200:
+        return "リッチメニューを作成しました。"
+    else:
+        return "リッチメニューの作成に失敗しました。"
+
+# webhookのエンドポイントでリッチメニューの作成やリンク処理が追加されました
