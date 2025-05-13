@@ -1,14 +1,12 @@
 import os
+import re
 import requests
 import json
-import random
-import re
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 環境変数の読み込み
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
@@ -32,30 +30,17 @@ async def webhook(request: Request):
         user_id = event["source"]["userId"]
         reply_token = event["replyToken"]
 
-        if event["type"] == "postback":
-            data = event["postback"]["data"]
-            if user_mode.get(user_id) == "janken":
-                user_choice = data
-                choices = ["グー", "チョキ", "パー"]
-                while True:
-                    bot_choice = random.choice(choices)
-                    result = determine_janken_result(user_choice, bot_choice)
-                    if result != "引き分け":
-                        break
-                send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
-                user_mode[user_id] = None
-            return {"status": "ok"}
-
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
             # PayPayリンクの自動検出
-            paypay_link = detect_paypay_link(text)
-            if paypay_link:
-                result = auto_receive_paypay(paypay_link)
+            link = detect_paypay_link(text)
+            if link:
+                result = auto_receive_paypay()
                 send_line_reply(reply_token, result)
+                continue
 
-            elif "天気" in text:
+            if "天気" in text:
                 user_mode[user_id] = "weather"
                 send_line_reply(reply_token, "どこの天気を知りたいですか？ 例: 東京、札幌、沖縄 など")
 
@@ -68,40 +53,27 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, message)
                 user_mode[user_id] = None
 
-            elif "じゃんけん" in text:
-                user_mode[user_id] = "janken"
-                buttons = [
-                    {"type": "postback", "label": "✊ グー", "data": "グー"},
-                    {"type": "postback", "label": "✌️ チョキ", "data": "チョキ"},
-                    {"type": "postback", "label": "🖐️ パー", "data": "パー"}
-                ]
-                send_line_buttons_reply(reply_token, "じゃんけんするよ〜！どれを出す？", buttons)
-
             else:
-                send_line_reply(reply_token, "「天気」「じゃんけん」「PayPay」って言ってみてね！")
+                send_line_reply(reply_token, "「天気」や PayPay 受け取りリンクを送ってみてね！")
 
         elif event["type"] == "message" and event["message"]["type"] == "location":
-            latitude = event["message"]["latitude"]
-            longitude = event["message"]["longitude"]
-            weather_message = get_weather_from_coordinates(latitude, longitude)
-            send_line_reply(reply_token, weather_message)
+            lat = event["message"]["latitude"]
+            lon = event["message"]["longitude"]
+            message = get_weather_from_coordinates(lat, lon)
+            send_line_reply(reply_token, message)
 
     return {"status": "ok"}
 
-# PayPayリンク自動検出
-def detect_paypay_link(text):
-    paypay_link_pattern = r'https://paypay.ne.jp/.*'
-    match = re.search(paypay_link_pattern, text)
-    if match:
-        return match.group(0)
-    return None
-
-# 天気情報の取得
 def detect_city(text):
     for jp_name in city_mapping:
         if jp_name in text:
             return city_mapping[jp_name]
     return "Unknown"
+
+def detect_paypay_link(text):
+    pattern = r'https://.*paypay\.ne\.jp/\w+'
+    match = re.search(pattern, text)
+    return match.group(0) if match else None
 
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
@@ -124,7 +96,7 @@ def get_weather_from_coordinates(lat, lon):
     return format_weather_message(weather, temp)
 
 def format_weather_message(weather, temp):
-    weather_dict = {
+    messages = {
         "Clear": f"今日は晴れだよ！気温は{temp}℃くらい。おでかけ日和だね〜☀️",
         "Clouds": f"今日はくもりかな〜。気温は{temp}℃くらいだよ。のんびり過ごそう☁️",
         "Rain": f"今日は雨っぽいよ…{temp}℃くらい。傘持ってってね☔",
@@ -135,34 +107,13 @@ def format_weather_message(weather, temp):
         "Mist": f"もやがかかってるみたい。気温は{temp}℃だよ〜",
         "Haze": f"かすんでるかも。気温は{temp}℃！体調に気をつけてね。"
     }
-    return weather_dict.get(weather, f"今の天気は{weather}で、気温は{temp}℃くらいだよ！")
+    return messages.get(weather, f"今の天気は{weather}で、気温は{temp}℃くらいだよ！")
 
-# じゃんけん結果判定
-def determine_janken_result(user_choice, bot_choice):
-    if user_choice == bot_choice:
-        return "引き分け"
-    elif (user_choice == "グー" and bot_choice == "チョキ") or \
-         (user_choice == "チョキ" and bot_choice == "パー") or \
-         (user_choice == "パー" and bot_choice == "グー"):
-        return "あなたの勝ち！"
-    else:
-        return "あなたの負け…"
-
-# PayPay自動受け取り
-# PayPayリンク自動検出
-def detect_paypay_link(text):
-    paypay_link_pattern = r'https://paypay.ne.jp/.*'
-    match = re.search(paypay_link_pattern, text)
-    if match:
-        return match.group(0)
-    return None
-
-# PayPay自動受け取り
-def auto_receive_paypay(link):
+def auto_receive_paypay():
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
         "Content-Type": "application/json; charset=utf-8",
-        "User-Agent": "PayPay/5.3.0 (jp.ne.paypay.iosapp; build:xxxxx; iOS 18.4.1) Alamofire/5.8.1",
+        "User-Agent": "PayPay/5.3.0 (jp.ne.paypay.iosapp)",
         "Client-Version": "5.3.0",
         "Client-OS-Version": "18.4.1",
         "Device-Name": "iPhone15,2",
@@ -179,18 +130,13 @@ def auto_receive_paypay(link):
 
     try:
         response = requests.post("https://api.paypay.ne.jp/v2/sendMoney/receive", headers=headers)
-        
-        # レスポンスの状態をログに出力
-        print(f"PayPay API Response: {response.status_code} - {response.text}")
-        
         if response.status_code == 200:
             return "PayPay受け取り成功！"
         else:
-            return f"PayPay受け取り失敗: {response.status_code} - {response.text}"
+            return f"PayPay受け取り失敗: {response.status_code}"
     except Exception as e:
         return f"エラーが発生しました: {str(e)}"
 
-# LINEメッセージ送信
 def send_line_reply(reply_token, message):
     url = "https://api.line.me/v2/bot/message/reply"
     headers = {
@@ -200,18 +146,5 @@ def send_line_reply(reply_token, message):
     payload = {
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": message}]
-    }
-    requests.post(url, headers=headers, json=payload)
-
-# LINEボタンメッセージ送信
-def send_line_buttons_reply(reply_token, text, buttons):
-    url = "https://api.line.me/v2/bot/message/reply"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}, {"type": "template", "altText": "選択してください", "template": {"type": "buttons", "actions": buttons}}]
     }
     requests.post(url, headers=headers, json=payload)
