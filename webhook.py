@@ -37,25 +37,32 @@ async def webhook(request: Request):
             text = event["message"]["text"].strip()
             reply_token = event["replyToken"]
 
+            # 「ChatGPT」モードに切り替え
             if text.lower() == "chatgpt":
                 user_mode[user_id] = "chatgpt"
                 send_line_reply(reply_token, "ChatGPTモードに切り替えたよ！質問してね。")
+            
+            # 「天気」モードに切り替え
             elif "天気" in text:
-                # ユーザーにどこの天気を知りたいかを尋ねる
                 user_mode[user_id] = "weather"
                 send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
+            
+            # 天気情報の送信
             elif user_mode.get(user_id) == "weather":
-                # ユーザーが都市名を送信したら天気情報を送る
                 city = detect_city(text)
-                if city == "Tokyo":  # 都市が見つからなかった場合の処理
+                if city == "Unknown":
                     send_line_reply(reply_token, "指定された都市の天気情報が見つかりませんでした。別の都市を試してみてください。")
                 else:
                     weather_message = get_weather(city)
                     send_line_reply(reply_token, weather_message)
                 user_mode[user_id] = None  # 天気情報を送った後、モードをリセット
+            
+            # ChatGPTモードで質問を送信
             elif user_mode.get(user_id) == "chatgpt":
                 answer = ask_chatgpt(text)
                 send_line_reply(reply_token, answer)
+            
+            # モードが設定されていない場合
             else:
                 send_line_reply(reply_token, "「天気」または「ChatGPT」と送ってね！")
 
@@ -66,7 +73,7 @@ def detect_city(text):
     for jp_name in city_mapping:
         if jp_name in text:
             return city_mapping[jp_name]
-    return "Tokyo"  # 都市が見つからなかった場合はデフォルトで東京を返す
+    return "Unknown"  # 都市が見つからなかった場合は「Unknown」を返す
 
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
