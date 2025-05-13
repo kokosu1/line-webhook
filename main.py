@@ -124,7 +124,10 @@ def get_weather_from_coordinates(lat, lon):
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
 
-    return f"現在地の天気は{weather}です。気温は{temp}℃です。"
+    # 天気状態を日本語に変換
+    weather_jp = translate_weather_to_japanese(weather)
+
+    return f"現在地の天気は{weather_jp}です。気温は{temp}℃です。"
 
 # 天気取得
 def get_weather(city):
@@ -136,16 +139,25 @@ def get_weather(city):
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
 
-    if weather == "Clear":
-        return f"今日は晴れだよ！{temp}℃くらい。良い一日を！☀️"
-    elif weather == "Clouds":
-        return f"今日はくもりかな〜。気温は{temp}℃くらいだよ。☁️"
-    elif weather in ["Rain", "Drizzle"]:
-        return f"今日は雨っぽいよ。{temp}℃くらいだから傘忘れずにね！☔"
-    elif weather == "Snow":
-        return f"今日は雪が降ってるみたい！寒いから気をつけてね〜 {temp}℃だよ。❄️"
-    else:
-        return f"{temp}℃の気温だよ。"
+    # 天気状態を日本語に変換
+    weather_jp = translate_weather_to_japanese(weather)
+
+    return f"今日は{weather_jp}です！気温は{temp}℃くらい。"
+
+# 天気状態を日本語に変換
+def translate_weather_to_japanese(weather):
+    weather_dict = {
+        "Clear": "晴れ",
+        "Clouds": "曇り",
+        "Rain": "雨",
+        "Drizzle": "小雨",
+        "Snow": "雪",
+        "Thunderstorm": "雷雨",
+        "Fog": "霧",
+        "Mist": "霧",
+        "Haze": "かすみ"
+    }
+    return weather_dict.get(weather, weather)
 
 # テキストメッセージを送信
 def send_line_reply(reply_token, message):
