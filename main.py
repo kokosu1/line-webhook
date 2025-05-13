@@ -9,13 +9,23 @@ load_dotenv()
 
 # 環境変数からキーを取り出す
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 app = FastAPI()
 
 # ユーザーが「ChatGPT」か「天気」か記録する辞書
 user_mode = {}
 
-# ボタンテンプレートでじゃんけんモードを選ばせる
+# 日本語の市名 → API用英語名
+city_mapping = {
+    "府中市": "Fuchu",
+    "東京": "Tokyo",
+    "札幌": "Sapporo",
+    "大阪": "Osaka",
+    "名古屋": "Nagoya"
+}
+
+# じゃんけんのボタンテンプレート
 def send_rock_paper_scissors(reply_token):
     headers = {
         "Content-Type": "application/json",
@@ -54,7 +64,7 @@ def send_rock_paper_scissors(reply_token):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ユーザーが選んだ手とコンピュータの手を比べて結果を返す
+# じゃんけんの結果を判定
 def judge_rps(user_hand):
     hands = ["グー", "チョキ", "パー"]
     computer_hand = random.choice(hands)
@@ -70,34 +80,42 @@ def judge_rps(user_hand):
     
     return result
 
-# webhookで受けたメッセージを処理
-@app.post("/webhook")
-async def webhook(request: Request):
-    body = await request.json()
-    events = body.get("events", [])
+# 天気情報を取得
+def get_weather(city):
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
+    res = requests.get(url)
+    if res.status_code != 200:
+        return "天気情報の取得に失敗しました。"
+    data = res.json()
+    weather = data["weather"][0]["main"]
+    temp = round(data["main"]["temp"])
 
-    for event in events:
-        if event["type"] == "message" and event["message"]["type"] == "text":
-            user_id = event["source"]["userId"]
-            text = event["message"]["text"].strip()
-            reply_token = event["replyToken"]
+    if weather == "Clear":
+        return f"今日は晴れだよ！{temp}℃くらい。良い一日を！☀️"
+    elif weather == "Clouds":
+        return f"今日はくもりかな〜。気温は{temp}℃くらいだよ。☁️"
+    elif weather in ["Rain", "Drizzle"]:
+        return f"今日は雨っぽいよ。{temp}℃くらいだから傘忘れずにね！☔"
+    elif weather == "Snow":
+        return f"今日は雪が降ってるみたい！寒いから気をつけてね〜 {temp}℃だよ。❄️"
+    else:
+        return f"{temp}℃で天気は{weather}ってなってるよ！"
 
-            # 「じゃんけん」と送られた場合
-            if "じゃんけん" in text:
-                user_mode[user_id] = "rps"  # じゃんけんモードに切り替え
-                send_rock_paper_scissors(reply_token)  # ボタンテンプレートで表示
+# おみくじ
+def omikuji():
+    fortunes = [
+        "大吉！素晴らしい一年が待っているよ！",
+        "中吉！よいことがありそうだよ！",
+        "小吉！まあまあの一年になるかもね。",
+        "凶！少し注意が必要かも。気をつけて！"
+    ]
+    return random.choice(fortunes)
 
-            # じゃんけんモードの場合
-            elif user_mode.get(user_id) == "rps":
-                result_message = judge_rps(text)  # じゃんけんの結果を判定
-                send_line_reply(reply_token, result_message)  # 結果を返信
-                user_mode[user_id] = None  # モードリセット
-
-            # モードが設定されていない場合
-            else:
-                send_line_reply(reply_token, "「じゃんけん」と送ってね！")
-
-    return {"status": "ok"}
+# 都道府県クイズ
+def prefecture_quiz():
+    prefectures = ["東京", "大阪", "京都", "北海道", "沖縄"]
+    answer = random.choice(prefectures)
+    return answer
 
 # LINEに返信を送る関数
 def send_line_reply(reply_token, message):
@@ -110,3 +128,67 @@ def send_line_reply(reply_token, message):
         "messages": [{"type": "text", "text": message}]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    body = await request.json()
+    events = body.get("events", [])
+
+    for event in events:
+        if event["type"] == "message" and event["message"]["type"] == "text":
+            user_id = event["source"]["userId"]
+            text = event["message"]["text"].strip()
+            reply_token = event["replyToken"]
+
+            # モードの切り替え
+            if text == "じゃんけん":
+                user_mode[user_id] = "rps"
+                send_rock_paper_scissors(reply_token)
+
+            elif text == "天気":
+                user_mode[user_id] = "weather"
+                send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
+
+            elif text == "おみくじ":
+                user_mode[user_id] = "omikuji"
+                fortune = omikuji()
+                send_line_reply(reply_token, fortune)
+
+            elif text == "クイズ":
+                user_mode[user_id] = "quiz"
+                prefecture = prefecture_quiz()
+                send_line_reply(reply_token, f"次の都道府県はどこでしょうか？\n{prefecture}の位置を答えてね！")
+
+            # 天気情報
+            elif user_mode.get(user_id) == "weather":
+                city = detect_city(text)
+                if city == "Unknown":
+                    send_line_reply(reply_token, "指定された都市の天気情報が見つかりませんでした。別の都市を試してみてください。")
+                else:
+                    weather_message = get_weather(city)
+                    send_line_reply(reply_token, weather_message)
+                user_mode[user_id] = None  # モードリセット
+
+            # じゃんけんモード
+            elif user_mode.get(user_id) == "rps":
+                result_message = judge_rps(text)
+                send_line_reply(reply_token, result_message)
+                user_mode[user_id] = None  # モードリセット
+
+            # クイズの答え
+            elif user_mode.get(user_id) == "quiz":
+                # ここに都道府県クイズの答え処理を追加することも可能
+                send_line_reply(reply_token, f"答えは{prefecture_quiz()}でした！")
+                user_mode[user_id] = None  # モードリセット
+
+            else:
+                send_line_reply(reply_token, "「じゃんけん」「天気」「おみくじ」「クイズ」などと送ってね！")
+
+    return {"status": "ok"}
+
+# ユーザーが送ったテキストから都市名を検出
+def detect_city(text):
+    for jp_name in city_mapping:
+        if jp_name in text:
+            return city_mapping[jp_name]
+    return "Unknown"  # 都市が見つからなかった場合は「Unknown」を返す
