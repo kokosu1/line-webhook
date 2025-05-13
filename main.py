@@ -20,8 +20,6 @@ def load_city_mapping():
         return json.load(f)
 
 city_mapping = load_city_mapping()
-
-# ユーザーのモード管理
 user_mode = {}
 
 @app.post("/webhook")
@@ -33,28 +31,28 @@ async def webhook(request: Request):
         user_id = event["source"]["userId"]
         reply_token = event["replyToken"]
 
-        # POSTBACK処理（ボタンが押された時）
+        # postback処理（ボタンが押されたとき）
         if event["type"] == "postback":
-    data = event["postback"]["data"]
-    if user_mode.get(user_id) == "janken":
-        user_choice = data
-        choices = ["グー", "チョキ", "パー"]
+            data = event["postback"]["data"]
+            if user_mode.get(user_id) == "janken":
+                user_choice = data
+                choices = ["グー", "チョキ", "パー"]
 
-        while True:
-            bot_choice = random.choice(choices)
-            result = determine_janken_result(user_choice, bot_choice)
-            if result != "引き分け":
-                break  # 勝敗がつくまでループ
+                while True:
+                    bot_choice = random.choice(choices)
+                    result = determine_janken_result(user_choice, bot_choice)
+                    if result != "引き分け":
+                        break
 
-        send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
-        user_mode[user_id] = None
-        return {"status": "ok"}
+                send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
+                user_mode[user_id] = None
+            return {"status": "ok"}
 
-        # 通常のテキストメッセージ処理
+        # 通常のメッセージ処理
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 天気モードに切り替え
+            # 「天気」モードに切り替え
             if "天気" in text:
                 user_mode[user_id] = "weather"
                 send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
@@ -69,24 +67,23 @@ async def webhook(request: Request):
                 user_mode[user_id] = None
 
             elif "おみくじ" in text:
-                user_mode[user_id] = "omikuji"
                 result = random.choice(["大吉", "中吉", "小吉", "凶", "大凶"])
                 send_line_reply(reply_token, f"おみくじの結果は「{result}」です！")
 
             elif "クイズ" in text:
-                question = "次のうち、実際の都道府県の名前はどれでしょう？\n1. 高砂\n2. 豊橋\n3. 栃木\n4. 福岡"
-                answer = "栃木"
-                send_line_reply(reply_token, question)
                 user_mode[user_id] = "quiz_answer"
-                user_mode[user_id + "_answer"] = answer
+                user_mode[user_id + "_answer"] = "栃木"
+                question = "次のうち、実際の都道府県の名前はどれでしょう？\n1. 高砂\n2. 豊橋\n3. 栃木\n4. 福岡"
+                send_line_reply(reply_token, question)
 
             elif user_mode.get(user_id) == "quiz_answer":
-                answer = user_mode.get(user_id + "_answer", "")
-                if text.strip() == answer:
+                correct = user_mode.get(user_id + "_answer")
+                if text.strip() == correct:
                     send_line_reply(reply_token, "正解です！")
                 else:
                     send_line_reply(reply_token, "不正解です。もう一度挑戦してね。")
                 user_mode[user_id] = None
+                user_mode.pop(user_id + "_answer", None)
 
             elif "じゃんけん" in text:
                 user_mode[user_id] = "janken"
@@ -102,12 +99,14 @@ async def webhook(request: Request):
 
     return {"status": "ok"}
 
+# 都市名を検出
 def detect_city(text):
     for jp_name in city_mapping:
         if jp_name in text:
             return city_mapping[jp_name]
     return "Unknown"
 
+# 天気取得
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -128,6 +127,7 @@ def get_weather(city):
     else:
         return f"{temp}℃の気温だよ。"
 
+# テキストメッセージを送信
 def send_line_reply(reply_token, message):
     url = "https://api.line.me/v2/bot/message/reply"
     headers = {
@@ -140,6 +140,7 @@ def send_line_reply(reply_token, message):
     }
     requests.post(url, headers=headers, json=payload)
 
+# ボタンメッセージを送信
 def send_line_buttons_reply(reply_token, text, buttons):
     url = "https://api.line.me/v2/bot/message/reply"
     headers = {
@@ -151,7 +152,7 @@ def send_line_buttons_reply(reply_token, text, buttons):
         "messages": [
             {
                 "type": "template",
-                "altText": "じゃんけんボタン",
+                "altText": "Buttons template",
                 "template": {
                     "type": "buttons",
                     "text": text,
@@ -162,6 +163,7 @@ def send_line_buttons_reply(reply_token, text, buttons):
     }
     requests.post(url, headers=headers, json=payload)
 
+# じゃんけんの勝敗判定
 def determine_janken_result(user_choice, bot_choice):
     if user_choice == bot_choice:
         return "引き分け"
