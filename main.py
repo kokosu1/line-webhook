@@ -1,6 +1,5 @@
 import os
 import re
-import random
 import requests
 import json
 import logging
@@ -51,13 +50,8 @@ async def webhook(request: Request):
                 result = generate_report(user_id)
                 send_line_reply(reply_token, result)
 
-            # じゃんけん
-            elif text == "じゃんけん":
-                result = play_janken()
-                send_line_reply(reply_token, result)
-
-            # PayPayリンクを受け取って支払いを行う
-            elif "paypay.me" in text:
+            # PayPayリンク自動検知
+            elif text.lower().startswith("paypay"):
                 result = handle_paypay_link(user_id, text)
                 send_line_reply(reply_token, result)
 
@@ -122,6 +116,12 @@ def generate_report(user_id):
     logging.debug(f"レポート生成: {report} (user_id: {user_id})")  # ログ追加
     return report
 
+def handle_paypay_link(user_id, text):
+    """ PayPayリンクの自動受け取りを検知する関数 """
+    if "paypay" in text.lower():
+        return "現在、PayPayの自動受け取り機能は製作中です。完成までお待ちください。"
+    return "PayPayリンクは無効です。"
+
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -167,66 +167,3 @@ def send_line_reply(reply_token, message):
         "messages": [{"type": "text", "text": message}]
     }
     requests.post(url, headers=headers, json=payload)
-
-# じゃんけん機能
-def play_janken():
-    choices = ["グー", "チョキ", "パー"]
-    user_choice = random.choice(choices)
-    bot_choice = random.choice(choices)
-
-    if user_choice == bot_choice:
-        return f"あなたの出した手: {user_choice}\n私の出した手: {bot_choice}\n引き分け！"
-    
-    if (user_choice == "グー" and bot_choice == "チョキ") or \
-       (user_choice == "チョキ" and bot_choice == "パー") or \
-       (user_choice == "パー" and bot_choice == "グー"):
-        return f"あなたの出した手: {user_choice}\n私の出した手: {bot_choice}\nあなたの勝ち！"
-    
-    return f"あなたの出した手: {user_choice}\n私の出した手: {bot_choice}\n私の勝ち！"
-
-# PayPayリンク処理
-def handle_paypay_link(user_id, text):
-    # PayPayリンクから送金リクエストを処理する部分を追加
-    # ここで受け取ったリンクを解析して処理
-    logging.debug(f"PayPayリンク受信: {text} (user_id: {user_id})")  # ログ追加
-    # 必要に応じて、PayPayのAPIを呼び出して受け取り処理を行う
-    return "PayPayリンクを受け取りました。処理を進めます..."
-
-# リッチメニューを作成する関数
-def create_rich_menu():
-    # リッチメニューの画像をLINEにアップロード
-    url = "https://api-data.line.me/v2/bot/richmenu"
-    headers = {
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "size": {
-            "width": 2500,
-            "height": 1686
-        },
-        "selected": False,
-        "name": "Main Menu",
-        "chatBarText": "Tap here",
-        "areas": [
-            {
-                "bounds": {"x": 0, "y": 0, "width": 833, "height": 843},
-                "action": {"type": "message", "text": "じゃんけん"}
-            },
-            {
-                "bounds": {"x": 833, "y": 0, "width": 833, "height": 843},
-                "action": {"type": "message", "text": "レポート"}
-            },
-            {
-                "bounds": {"x": 1666, "y": 0, "width": 834, "height": 843},
-                "action": {"type": "message", "text": "支出"}
-            }
-        ]
-    }
-
-    res = requests.post(url, headers=headers, json=payload)
-    if res.status_code == 200:
-        return "リッチメニューを作成しました。"
-    else:
-        return "リッチメニューの作成に失敗しました。"
-
-# webhookのエンドポイントでリッチメニューの作成やリンク処理が追加されました
