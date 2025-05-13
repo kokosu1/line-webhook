@@ -54,6 +54,25 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, f"エラーが発生しました: {str(e)}")
                 continue
 
+            # 支出削除
+            elif "削除" in text and "円" in text:
+                category, amount = parse_expense_for_delete(text)
+                if category and amount:
+                    if user_id in user_expenses and category in user_expenses[user_id]:
+                        if user_expenses[user_id][category] >= amount:
+                            user_expenses[user_id][category] -= amount
+                            if user_expenses[user_id][category] == 0:
+                                del user_expenses[user_id][category]
+                            save_expenses()
+                            send_line_reply(reply_token, f"{category}から{amount}円を削除しました。")
+                        else:
+                            send_line_reply(reply_token, f"{category}の支出額が指定された金額に足りません。")
+                    else:
+                        send_line_reply(reply_token, f"{category}の支出は存在しません。")
+                else:
+                    send_line_reply(reply_token, "支出削除の形式が正しくありません。例: 食費500円削除")
+                continue
+
             # レポート要求
             elif "レポート" in text or "支出レポート" in text:
                 report_message = generate_report(user_id)
@@ -94,6 +113,15 @@ async def webhook(request: Request):
 # 支出解析
 def parse_expense(text):
     match = re.match(r"([^\d]+)(\d+)円", text)
+    if match:
+        category = match.group(1).strip()
+        amount = int(match.group(2))
+        return category, amount
+    return None, None
+
+# 支出削除解析
+def parse_expense_for_delete(text):
+    match = re.match(r"([^\d]+)(\d+)円削除", text)
     if match:
         category = match.group(1).strip()
         amount = int(match.group(2))
@@ -176,40 +204,4 @@ def format_weather_message(weather, temp):
 def auto_receive_paypay():
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
-        "Content-Type": "application/json; charset=utf-8",
-        "User-Agent": "PayPay/5.3.0 (jp.ne.paypay.iosapp)",
-        "Client-Version": "5.3.0",
-        "Client-OS-Version": "18.4.1",
-        "Device-Name": "iPhone15,2",
-        "Client-UUID": "c381c4fa-1c55-4cea-8b89-6f2d85e28552",
-        "Device-UUID": "ccce2ff3-a9bd-4591-b0f2-ae069967a4bf",
-        "Client-OS-Type": "IOS",
-        "Timezone": "Asia/Tokyo",
-        "System-Locale": "ja_JP",
-        "Network-Status": "WIFI",
-        "Client-Mode": "NORMAL",
-        "Is-Emulator": "false",
-        "Client-Type": "PAYPAYAPP"
-    }
-
-    try:
-        response = requests.post("https://api.paypay.ne.jp/v2/sendMoney/receive", headers=headers)
-        if response.status_code == 200:
-            return "PayPay受け取り成功！"
-        else:
-            return f"PayPay受け取り失敗: {response.status_code}"
-    except Exception as e:
-        return f"エラーが発生しました: {str(e)}"
-
-# LINEメッセージ送信
-def send_line_reply(reply_token, message):
-    url = "https://api.line.me/v2/bot/message/reply"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": message}]
-    }
-    requests.post(url, headers=headers, json=payload)
+        "Content
