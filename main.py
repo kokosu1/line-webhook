@@ -4,7 +4,6 @@ import requests
 import json
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
-from datetime import datetime
 
 load_dotenv()
 
@@ -14,7 +13,7 @@ PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
 
 app = FastAPI()
 user_mode = {}
-user_expenses = {}  # ユーザーごとの支出を記録
+expenses = {}
 
 # 都市マッピング読み込み
 def load_city_mapping():
@@ -34,50 +33,6 @@ async def webhook(request: Request):
 
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
-
-            # 支出情報の解析
-            if "円" in text:
-                try:
-                    category, amount = parse_expense(text)
-                    if category:
-                        if user_id not in user_expenses:
-                            user_expenses[user_id] = {}
-                        if category not in user_expenses[user_id]:
-                            user_expenses[user_id][category] = 0
-                        
-                        user_expenses[user_id][category] += amount
-                        save_expenses()
-                        send_line_reply(reply_token, f"{category}に{amount}円を記録しました！")
-                    else:
-                        send_line_reply(reply_token, "支出の形式が正しくありません。例: 食費500円")
-                except Exception as e:
-                    send_line_reply(reply_token, f"エラーが発生しました: {str(e)}")
-                continue
-
-            # 支出削除
-            elif "削除" in text and "円" in text:
-                category, amount = parse_expense_for_delete(text)
-                if category and amount:
-                    if user_id in user_expenses and category in user_expenses[user_id]:
-                        if user_expenses[user_id][category] >= amount:
-                            user_expenses[user_id][category] -= amount
-                            if user_expenses[user_id][category] == 0:
-                                del user_expenses[user_id][category]
-                            save_expenses()
-                            send_line_reply(reply_token, f"{category}から{amount}円を削除しました。")
-                        else:
-                            send_line_reply(reply_token, f"{category}の支出額が指定された金額に足りません。")
-                    else:
-                        send_line_reply(reply_token, f"{category}の支出は存在しません。")
-                else:
-                    send_line_reply(reply_token, "支出削除の形式が正しくありません。例: 食費500円削除")
-                continue
-
-            # レポート要求
-            elif "レポート" in text or "支出レポート" in text:
-                report_message = generate_report(user_id)
-                send_line_reply(reply_token, report_message)
-                continue
 
             # PayPayリンクの自動検出
             link = detect_paypay_link(text)
@@ -99,6 +54,21 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, message)
                 user_mode[user_id] = None
 
+            # 支出の処理
+            elif '支出' in text:
+                handle_expenses(user_id, text, reply_token)
+
+            elif '支出削除' in text:
+                handle_expenses(user_id, text, reply_token)
+
+            # レポート表示
+            elif 'レポート' in text:
+                if user_id in expenses and expenses[user_id]:
+                    report = "\n".join([f"{category}: {amount}円" for category, amount in expenses[user_id].items()])
+                    send_line_reply(reply_token, f"今月の支出:\n{report}")
+                else:
+                    send_line_reply(reply_token, "支出記録がありません。")
+
             else:
                 send_line_reply(reply_token, "「天気」や PayPay 受け取りリンクを送ってみてね！")
 
@@ -110,47 +80,46 @@ async def webhook(request: Request):
 
     return {"status": "ok"}
 
-# 支出解析
-def parse_expense(text):
-    match = re.match(r"([^\d]+)(\d+)円", text)
-    if match:
-        category = match.group(1).strip()
-        amount = int(match.group(2))
-        return category, amount
-    return None, None
+# 支出の処理
+def handle_expenses(user_id, text, reply_token):
+    if '支出' in text:
+        # 支出記録の処理
+        match = re.match(r'支出 (\w+) (\d+)円', text)
+        if match:
+            category = match.group(1)
+            amount = int(match.group(2))
 
-# 支出削除解析
-def parse_expense_for_delete(text):
-    match = re.match(r"([^\d]+)(\d+)円削除", text)
-    if match:
-        category = match.group(1).strip()
-        amount = int(match.group(2))
-        return category, amount
-    return None, None
+            # 支出記録を保存
+            if user_id not in expenses:
+                expenses[user_id] = {}
+            if category not in expenses[user_id]:
+                expenses[user_id][category] = 0
+            expenses[user_id][category] += amount
 
-# レポートの生成
-def generate_report(user_id):
-    if user_id not in user_expenses or not user_expenses[user_id]:
-        return "まだ支出の記録がありません。支出を記録してから、レポートを送ることができます。"
+            send_line_reply(reply_token, f"{category}に{amount}円を追加しました！")
 
-    expenses = user_expenses[user_id]
-    total_expenses = {}
-    for category, amount in expenses.items():
-        total_expenses[category] = amount
+        # 支出削除
+        elif '支出削除' in text:
+            match_delete = re.match(r'支出削除 (\w+) (\d+)円', text)
+            if match_delete:
+                category = match_delete.group(1)
+                amount = int(match_delete.group(2))
 
-    # レポートメッセージ作成
-    message = "現在の支出レポートです:\n"
-    for category, amount in total_expenses.items():
-        message += f"{category}: {amount}円\n"
+                # 削除する支出が存在するか確認
+                if user_id in expenses and category in expenses[user_id]:
+                    current_amount = expenses[user_id][category]
 
-    return message
+                    if current_amount >= amount:
+                        expenses[user_id][category] -= amount
+                        if expenses[user_id][category] == 0:
+                            del expenses[user_id][category]
+                        send_line_reply(reply_token, f"{category}から{amount}円を削除しました！")
+                    else:
+                        send_line_reply(reply_token, f"{category}の金額が不足しています。現在の金額は{current_amount}円です。")
+                else:
+                    send_line_reply(reply_token, "指定された支出が見つかりません。")
 
-# 支出の保存
-def save_expenses():
-    with open('user_expenses.json', 'w', encoding='utf-8') as f:
-        json.dump(user_expenses, f, ensure_ascii=False, indent=4)
-
-# 都市検出
+# 都市名の検出
 def detect_city(text):
     for jp_name in city_mapping:
         if jp_name in text:
@@ -163,7 +132,7 @@ def detect_paypay_link(text):
     match = re.search(pattern, text)
     return match.group(0) if match else None
 
-# 天気情報取得
+# 天気の取得
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -174,7 +143,7 @@ def get_weather(city):
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
 
-# 緯度経度から天気情報取得
+# 位置情報から天気を取得
 def get_weather_from_coordinates(lat, lon):
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -185,7 +154,7 @@ def get_weather_from_coordinates(lat, lon):
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
 
-# 天気メッセージの整形
+# 天気メッセージのフォーマット
 def format_weather_message(weather, temp):
     messages = {
         "Clear": f"今日は晴れだよ！気温は{temp}℃くらい。おでかけ日和だね〜☀️",
@@ -200,8 +169,44 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"今の天気は{weather}で、気温は{temp}℃くらいだよ！")
 
-# PayPay受け取り自動処理
+# PayPayの受け取り
 def auto_receive_paypay():
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
-        "Content
+        "Content-Type": "application/json; charset=utf-8",
+        "User-Agent": "PayPay/5.3.0 (jp.ne.paypay.iosapp)",
+        "Client-Version": "5.3.0",
+        "Client-OS-Version": "18.4.1",
+        "Device-Name": "iPhone15,2",
+        "Client-UUID": "c381c4fa-1c55-4cea-8b89-6f2d85e28552",
+        "Device-UUID": "ccce2ff3-a9bd-4591-b0f2-ae069967a4bf",
+        "Client-OS-Type": "IOS",
+        "Timezone": "Asia/Tokyo",
+        "System-Locale": "ja_JP",
+        "Network-Status": "WIFI",
+        "Client-Mode": "NORMAL",
+        "Is-Emulator": "false",
+        "Client-Type": "PAYPAYAPP"
+    }
+
+    try:
+        response = requests.post("https://api.paypay.ne.jp/v2/sendMoney/receive", headers=headers)
+        if response.status_code == 200:
+            return "PayPay受け取り成功！"
+        else:
+            return "順次準備中です。完成までお待ちください。"
+    except Exception as e:
+        return f"エラーが発生しました: {str(e)}"
+
+# LINEへの返信
+def send_line_reply(reply_token, message):
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": message}]
+    }
+    requests.post(url, headers=headers, json=payload)
