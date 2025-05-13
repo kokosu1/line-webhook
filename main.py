@@ -43,12 +43,9 @@ async def webhook(request: Request):
                 send_line_reply(reply_token, "製作中です。完成までお待ちください")
                 return {"status": "ok"}
 
-            # じゃんけん
-            if text.startswith("じゃんけん"):
-                user_hand = text.replace("じゃんけん", "").strip()
-                bot_hand = random.choice(["グー", "チョキ", "パー"])
-                result = judge_janken(user_hand, bot_hand)
-                send_line_reply(reply_token, f"あなた: {user_hand}\nBot: {bot_hand}\n結果: {result}")
+            # じゃんけんの開始
+            if text == "じゃんけん":
+                send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
             # 支出関連
@@ -65,7 +62,7 @@ async def webhook(request: Request):
                 return {"status": "ok"}
 
             # その他
-            send_line_reply(reply_token, "「支出」や「じゃんけん グー」などのコマンドを送ってみてね！")
+            send_line_reply(reply_token, "「支出」や「じゃんけん」などのコマンドを送ってみてね！")
 
         elif event["type"] == "message" and event["message"]["type"] == "location":
             lat = event["message"]["latitude"]
@@ -73,7 +70,51 @@ async def webhook(request: Request):
             message = get_weather_from_coordinates(lat, lon)
             send_line_reply(reply_token, message)
 
+        elif event["type"] == "postback":
+            data = event["postback"]["data"]
+            if data in ["グー", "チョキ", "パー"]:
+                bot_hand = random.choice(["グー", "チョキ", "パー"])
+                result = judge_janken(data, bot_hand)
+                send_line_reply(reply_token, f"あなた: {data}\nBot: {bot_hand}\n結果: {result}")
+                return {"status": "ok"}
+
     return {"status": "ok"}
+
+def send_janken_buttons(reply_token):
+    buttons = {
+        "type": "template",
+        "altText": "じゃんけんを選んでください。",
+        "template": {
+            "type": "buttons",
+            "text": "じゃんけんを選んでください。",
+            "actions": [
+                {
+                    "type": "postback",
+                    "label": "グー",
+                    "data": "グー"
+                },
+                {
+                    "type": "postback",
+                    "label": "チョキ",
+                    "data": "チョキ"
+                },
+                {
+                    "type": "postback",
+                    "label": "パー",
+                    "data": "パー"
+                }
+            ]
+        }
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [buttons]
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=payload)
 
 def judge_janken(user, bot):
     hands = {"グー": 0, "チョキ": 1, "パー": 2}
@@ -126,6 +167,17 @@ def generate_report(user_id):
 
 def get_weather_from_coordinates(lat, lon):
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
+    res = requests.get(url)
+    if res.status_code != 200:
+        return "天気情報の取得に失敗しました。"
+    data = res.json()
+    weather = data["weather"][0]["main"]
+    temp = round(data["main"]["temp"])
+    return format_weather_message(weather, temp)
+
+def get_weather(city):
+    city_english = city_mapping.get(city, city)  # city_mapping を使用して都市名を英語に変換
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city_english}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
     if res.status_code != 200:
         return "天気情報の取得に失敗しました。"
