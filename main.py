@@ -86,12 +86,15 @@ def get_weather_by_city(city):
 
 def format_weather_message(weather, temp):
     messages = {
-        "Clear": f"今日は晴れ！気温は{temp}℃くらい。お出かけ日和だね！",
-        "Clouds": f"今日はくもり。気温は{temp}℃くらい。",
-        "Rain": f"今日は雨。気温は{temp}℃くらい。傘を忘れずに！",
-        "Snow": f"雪が降ってるよ！気温は{temp}℃、暖かくしてね。",
+        "Clear": f"☀️ 晴れだよ！気温は約{temp}℃。お出かけ日和だね！",
+        "Clouds": f"☁️ くもり空だよ。気温は{temp}℃くらい。",
+        "Rain": f"🌧️ 雨が降ってるよ。気温は{temp}℃。傘を忘れずにね！",
+        "Snow": f"❄️ 雪が降ってるよ！気温は{temp}℃、あったかくしてね。",
+        "Thunderstorm": f"⚡ 雷が鳴ってるかも！気温は{temp}℃、気をつけて！",
+        "Drizzle": f"🌦️ 小雨が降ってるよ。気温は{temp}℃くらい。",
+        "Mist": f"🌫️ 霧が出てるよ。気温は{temp}℃。運転には注意してね！"
     }
-    return messages.get(weather, f"今の天気は{weather}、気温は{temp}℃くらいだよ。")
+    return messages.get(weather, f"現在の天気は「{weather}」で、気温は{temp}℃くらいだよ。")
 
 # 支出記録
 def handle_expense(user_id, text):
