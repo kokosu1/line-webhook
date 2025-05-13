@@ -1,8 +1,8 @@
 import os
-import random 
 import requests
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
+import random
 
 # .envファイルから秘密情報を読み込む
 load_dotenv()
@@ -13,136 +13,156 @@ WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 app = FastAPI()
 
-# ユーザーが「ChatGPT」か「天気」か記録する辞書
+# ユーザーが「天気」「おみくじ」「クイズ」「じゃんけん」のモードを記録する辞書
 user_mode = {}
 
-# 日本語の市名 → API用英語名
+# 日本の都道府県と市、ベトナムの都市
 city_mapping = {
-    city_mapping = {
-    "府中市": "Fuchu",
-    "東京": "Tokyo",
-    "札幌": "Sapporo",
-    "大阪": "Osaka",
-    "名古屋": "Nagoya",
+    # 日本の都道府県と市
     "北海道": "Hokkaido",
-    "青森県": "Aomori",
-    "岩手県": "Iwate",
-    "宮城県": "Miyagi",
-    "秋田県": "Akita",
-    "山形県": "Yamagata",
-    "福島県": "Fukushima",
-    "茨城県": "Ibaraki",
-    "栃木県": "Tochigi",
-    "群馬県": "Gunma",
-    "埼玉県": "Saitama",
-    "千葉県": "Chiba",
-    "東京都": "Tokyo",
-    "神奈川県": "Kanagawa",
-    "新潟県": "Niigata",
-    "富山県": "Toyama",
-    "石川県": "Ishikawa",
-    "福井県": "Fukui",
-    "山梨県": "Yamanashi",
-    "長野県": "Nagano",
-    "岐阜県": "Gifu",
-    "静岡県": "Shizuoka",
-    "愛知県": "Aichi",
-    "三重県": "Mie",
-    "滋賀県": "Shiga",
-    "京都府": "Kyoto",
-    "大阪府": "Osaka",
-    "兵庫県": "Hyogo",
-    "奈良県": "Nara",
-    "和歌山県": "Wakayama",
-    "鳥取県": "Tottori",
-    "島根県": "Shimane",
-    "岡山県": "Okayama",
-    "広島県": "Hiroshima",
-    "山口県": "Yamaguchi",
-    "徳島県": "Tokushima",
-    "香川県": "Kagawa",
-    "愛媛県": "Ehime",
-    "高知県": "Kochi",
-    "福岡県": "Fukuoka",
-    "佐賀県": "Saga",
-    "長崎県": "Nagasaki",
-    "熊本県": "Kumamoto",
-    "大分県": "Oita",
-    "宮崎県": "Miyazaki",
-    "鹿児島県": "Kagoshima",
-    "沖縄県": "Okinawa",
-    
+    "青森": "Aomori",
+    "岩手": "Iwate",
+    "宮城": "Miyagi",
+    "秋田": "Akita",
+    "山形": "Yamagata",
+    "福島": "Fukushima",
+    "茨城": "Ibaraki",
+    "栃木": "Tochigi",
+    "群馬": "Gunma",
+    "埼玉": "Saitama",
+    "千葉": "Chiba",
+    "東京": "Tokyo",
+    "神奈川": "Kanagawa",
+    "新潟": "Niigata",
+    "富山": "Toyama",
+    "石川": "Ishikawa",
+    "福井": "Fukui",
+    "山梨": "Yamanashi",
+    "長野": "Nagano",
+    "岐阜": "Gifu",
+    "静岡": "Shizuoka",
+    "愛知": "Aichi",
+    "三重": "Mie",
+    "滋賀": "Shiga",
+    "京都": "Kyoto",
+    "大阪": "Osaka",
+    "兵庫": "Hyogo",
+    "奈良": "Nara",
+    "和歌山": "Wakayama",
+    "鳥取": "Tottori",
+    "島根": "Shimane",
+    "岡山": "Okayama",
+    "広島": "Hiroshima",
+    "山口": "Yamaguchi",
+    "徳島": "Tokushima",
+    "香川": "Kagawa",
+    "愛媛": "Ehime",
+    "高知": "Kochi",
+    "福岡": "Fukuoka",
+    "佐賀": "Saga",
+    "長崎": "Nagasaki",
+    "熊本": "Kumamoto",
+    "大分": "Oita",
+    "宮崎": "Miyazaki",
+    "鹿児島": "Kagoshima",
+    "沖縄": "Okinawa",
+    "府中市": "Fuchu",
+    "札幌": "Sapporo",
+    "名古屋": "Nagoya",
+
     # ベトナムの都市
-    "ホーチミン市": "Ho Chi Minh City",
     "ハノイ": "Hanoi",
-    "ダナン": "Da Nang",
-    "ホイアン": "Hoi An",
-    "ハイフォン": "Hai Phong",
-    "ニンビン": "Ninh Binh",
+    "ホーチミン": "HoChiMinh",
+    "ダナン": "DaNang",
     "フエ": "Hue",
-    "ビンディン": "Vinh Dien",
-    "カントー": "Can Tho",
-    "クイニョン": "Quy Nhon",
-    "ニャチャン": "Nha Trang"
+    "ハイフォン": "HaiPhong",
+    "カントー": "CanTho",
+    "ビンズオン": "BinhDuong",
+    "バクニン": "BacNinh",
+    "ダラット": "DaLat",
+    "ニャチャン": "NhaTrang",
+    "ホイアン": "HoiAn",
+    "ソクチャン": "SocTrang",
+    "ロングアン": "LongAn",
+    "カイラン": "CaMau"
 }
-}
 
-# じゃんけんのボタンテンプレート
-def send_rock_paper_scissors(reply_token):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [
-            {
-                "type": "template",
-                "altText": "じゃんけんを選んでね",
-                "template": {
-                    "type": "buttons",
-                    "title": "じゃんけん",
-                    "text": "どれを出す？",
-                    "actions": [
-                        {
-                            "type": "message",
-                            "label": "グー",
-                            "text": "グー"
-                        },
-                        {
-                            "type": "message",
-                            "label": "チョキ",
-                            "text": "チョキ"
-                        },
-                        {
-                            "type": "message",
-                            "label": "パー",
-                            "text": "パー"
-                        }
-                    ]
-                }
-            }
-        ]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+@app.post("/webhook")
+async def webhook(request: Request):
+    body = await request.json()
+    events = body.get("events", [])
 
-# じゃんけんの結果を判定
-def judge_rps(user_hand):
-    hands = ["グー", "チョキ", "パー"]
-    computer_hand = random.choice(hands)
+    for event in events:
+        if event["type"] == "message" and event["message"]["type"] == "text":
+            user_id = event["source"]["userId"]
+            text = event["message"]["text"].strip()
+            reply_token = event["replyToken"]
 
-    if user_hand == computer_hand:
-        result = "引き分け！"
-    elif (user_hand == "グー" and computer_hand == "チョキ") or \
-         (user_hand == "チョキ" and computer_hand == "パー") or \
-         (user_hand == "パー" and computer_hand == "グー"):
-        result = f"あなたの「{user_hand}」が勝ち！コンピュータは「{computer_hand}」でした！"
-    else:
-        result = f"あなたの「{user_hand}」が負け！コンピュータは「{computer_hand}」でした！"
-    
-    return result
+            # 「天気」モードに切り替え
+            if "天気" in text:
+                user_mode[user_id] = "weather"
+                send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
+            
+            # 天気情報の送信
+            elif user_mode.get(user_id) == "weather":
+                city = detect_city(text)
+                if city == "Unknown":
+                    send_line_reply(reply_token, "指定された都市の天気情報が見つかりませんでした。別の都市を試してみてください。")
+                else:
+                    weather_message = get_weather(city)
+                    send_line_reply(reply_token, weather_message)
+                user_mode[user_id] = None  # 天気情報を送った後、モードをリセット
 
-# 天気情報を取得
+            # 「おみくじ」モード
+            elif "おみくじ" in text:
+                user_mode[user_id] = "omikuji"
+                result = random.choice(["大吉", "中吉", "小吉", "凶", "大凶"])
+                send_line_reply(reply_token, f"おみくじの結果は「{result}」です！")
+
+            # 「都道府県クイズ」モード
+            elif "クイズ" in text:
+                user_mode[user_id] = "quiz"
+                question = "次のうち、実際の都道府県の名前はどれでしょう？\n1. 高砂\n2. 豊橋\n3. 栃木\n4. 福岡"
+                answer = "栃木"
+                send_line_reply(reply_token, question)
+                user_mode[user_id] = "quiz_answer"
+                user_mode[user_id] = answer
+
+            # 「じゃんけん」モード
+            elif "じゃんけん" in text:
+                user_mode[user_id] = "janken"
+                send_line_reply(reply_token, "じゃんけんをしましょう！グー、チョキ、パーのいずれかを送ってください。")
+
+            # じゃんけんの処理
+            elif user_mode.get(user_id) == "janken":
+                user_choice = text.strip()
+                choices = ["グー", "チョキ", "パー"]
+                bot_choice = random.choice(choices)
+                result = determine_janken_result(user_choice, bot_choice)
+                send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
+                user_mode[user_id] = None
+
+            # クイズの答え合わせ
+            elif user_mode.get(user_id) == "quiz_answer":
+                if text.strip() == user_mode[user_id]:
+                    send_line_reply(reply_token, "正解です！")
+                else:
+                    send_line_reply(reply_token, "不正解です。もう一度挑戦してね。")
+                user_mode[user_id] = None
+
+            # モードが設定されていない場合
+            else:
+                send_line_reply(reply_token, "「天気」「おみくじ」「クイズ」「じゃんけん」から選んでください！")
+
+    return {"status": "ok"}
+
+def detect_city(text):
+    # ユーザーが送ったテキストから都市名を検出
+    for jp_name in city_mapping:
+        if jp_name in text:
+            return city_mapping[jp_name]
+    return "Unknown"  # 都市が見つからなかった場合は「Unknown」を返す
+
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -163,23 +183,16 @@ def get_weather(city):
     else:
         return f"{temp}℃で天気は{weather}ってなってるよ！"
 
-# おみくじ
-def omikuji():
-    fortunes = [
-        "大吉！素晴らしい一年が待っているよ！",
-        "中吉！よいことがありそうだよ！",
-        "小吉！まあまあの一年になるかもね。",
-        "凶！少し注意が必要かも。気をつけて！"
-    ]
-    return random.choice(fortunes)
+def determine_janken_result(user_choice, bot_choice):
+    if user_choice == bot_choice:
+        return "あいこ"
+    elif (user_choice == "グー" and bot_choice == "チョキ") or \
+         (user_choice == "チョキ" and bot_choice == "パー") or \
+         (user_choice == "パー" and bot_choice == "グー"):
+        return "あなたの勝ち！"
+    else:
+        return "ボットの勝ち！"
 
-# 都道府県クイズ
-def prefecture_quiz():
-    prefectures = ["東京", "大阪", "京都", "北海道", "沖縄"]
-    answer = random.choice(prefectures)
-    return answer
-
-# LINEに返信を送る関数
 def send_line_reply(reply_token, message):
     headers = {
         "Content-Type": "application/json",
@@ -190,67 +203,3 @@ def send_line_reply(reply_token, message):
         "messages": [{"type": "text", "text": message}]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-@app.post("/webhook")
-async def webhook(request: Request):
-    body = await request.json()
-    events = body.get("events", [])
-
-    for event in events:
-        if event["type"] == "message" and event["message"]["type"] == "text":
-            user_id = event["source"]["userId"]
-            text = event["message"]["text"].strip()
-            reply_token = event["replyToken"]
-
-            # モードの切り替え
-            if text == "じゃんけん":
-                user_mode[user_id] = "rps"
-                send_rock_paper_scissors(reply_token)
-
-            elif text == "天気":
-                user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
-
-            elif text == "おみくじ":
-                user_mode[user_id] = "omikuji"
-                fortune = omikuji()
-                send_line_reply(reply_token, fortune)
-
-            elif text == "クイズ":
-                user_mode[user_id] = "quiz"
-                prefecture = prefecture_quiz()
-                send_line_reply(reply_token, f"次の都道府県はどこでしょうか？\n{prefecture}の位置を答えてね！")
-
-            # 天気情報
-            elif user_mode.get(user_id) == "weather":
-                city = detect_city(text)
-                if city == "Unknown":
-                    send_line_reply(reply_token, "指定された都市の天気情報が見つかりませんでした。別の都市を試してみてください。")
-                else:
-                    weather_message = get_weather(city)
-                    send_line_reply(reply_token, weather_message)
-                user_mode[user_id] = None  # モードリセット
-
-            # じゃんけんモード
-            elif user_mode.get(user_id) == "rps":
-                result_message = judge_rps(text)
-                send_line_reply(reply_token, result_message)
-                user_mode[user_id] = None  # モードリセット
-
-            # クイズの答え
-            elif user_mode.get(user_id) == "quiz":
-                # ここに都道府県クイズの答え処理を追加することも可能
-                send_line_reply(reply_token, f"答えは{prefecture_quiz()}でした！")
-                user_mode[user_id] = None  # モードリセット
-
-            else:
-                send_line_reply(reply_token, "「じゃんけん」「天気」「おみくじ」「クイズ」などと送ってね！")
-
-    return {"status": "ok"}
-
-# ユーザーが送ったテキストから都市名を検出
-def detect_city(text):
-    for jp_name in city_mapping:
-        if jp_name in text:
-            return city_mapping[jp_name]
-    return "Unknown"  # 都市が見つからなかった場合は「Unknown」を返す
