@@ -43,12 +43,15 @@ async def webhook(request: Request):
             elif "天気" in text:
                 # ユーザーにどこの天気を知りたいかを尋ねる
                 user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "どこの天気予報を知りたいですか？例えば「東京」や「大阪」と教えてね。")
+                send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
             elif user_mode.get(user_id) == "weather":
                 # ユーザーが都市名を送信したら天気情報を送る
                 city = detect_city(text)
-                weather_message = get_weather(city)
-                send_line_reply(reply_token, weather_message)
+                if city == "Tokyo":  # 都市が見つからなかった場合の処理
+                    send_line_reply(reply_token, "指定された都市の天気情報が見つかりませんでした。別の都市を試してみてください。")
+                else:
+                    weather_message = get_weather(city)
+                    send_line_reply(reply_token, weather_message)
                 user_mode[user_id] = None  # 天気情報を送った後、モードをリセット
             elif user_mode.get(user_id) == "chatgpt":
                 answer = ask_chatgpt(text)
