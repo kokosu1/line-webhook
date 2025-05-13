@@ -4,6 +4,7 @@ import requests
 import json
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -13,6 +14,7 @@ PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
 
 app = FastAPI()
 user_mode = {}
+user_expenses = {}  # ユーザーごとの支出を記録
 
 # 都市マッピング読み込み
 def load_city_mapping():
@@ -32,6 +34,31 @@ async def webhook(request: Request):
 
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
+
+            # 支出情報の解析
+            if "円" in text:
+                try:
+                    category, amount = parse_expense(text)
+                    if category:
+                        if user_id not in user_expenses:
+                            user_expenses[user_id] = {}
+                        if category not in user_expenses[user_id]:
+                            user_expenses[user_id][category] = 0
+                        
+                        user_expenses[user_id][category] += amount
+                        save_expenses()
+                        send_line_reply(reply_token, f"{category}に{amount}円を記録しました！")
+                    else:
+                        send_line_reply(reply_token, "支出の形式が正しくありません。例: 食費500円")
+                except Exception as e:
+                    send_line_reply(reply_token, f"エラーが発生しました: {str(e)}")
+                continue
+
+            # レポート要求
+            elif "レポート" in text or "支出レポート" in text:
+                report_message = generate_report(user_id)
+                send_line_reply(reply_token, report_message)
+                continue
 
             # PayPayリンクの自動検出
             link = detect_paypay_link(text)
@@ -64,17 +91,51 @@ async def webhook(request: Request):
 
     return {"status": "ok"}
 
+# 支出解析
+def parse_expense(text):
+    match = re.match(r"([^\d]+)(\d+)円", text)
+    if match:
+        category = match.group(1).strip()
+        amount = int(match.group(2))
+        return category, amount
+    return None, None
+
+# レポートの生成
+def generate_report(user_id):
+    if user_id not in user_expenses or not user_expenses[user_id]:
+        return "まだ支出の記録がありません。支出を記録してから、レポートを送ることができます。"
+
+    expenses = user_expenses[user_id]
+    total_expenses = {}
+    for category, amount in expenses.items():
+        total_expenses[category] = amount
+
+    # レポートメッセージ作成
+    message = "現在の支出レポートです:\n"
+    for category, amount in total_expenses.items():
+        message += f"{category}: {amount}円\n"
+
+    return message
+
+# 支出の保存
+def save_expenses():
+    with open('user_expenses.json', 'w', encoding='utf-8') as f:
+        json.dump(user_expenses, f, ensure_ascii=False, indent=4)
+
+# 都市検出
 def detect_city(text):
     for jp_name in city_mapping:
         if jp_name in text:
             return city_mapping[jp_name]
     return "Unknown"
 
+# PayPayリンクの検出
 def detect_paypay_link(text):
     pattern = r'https://.*paypay\.ne\.jp/\w+'
     match = re.search(pattern, text)
     return match.group(0) if match else None
 
+# 天気情報取得
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -85,6 +146,7 @@ def get_weather(city):
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
 
+# 緯度経度から天気情報取得
 def get_weather_from_coordinates(lat, lon):
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -95,6 +157,7 @@ def get_weather_from_coordinates(lat, lon):
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
 
+# 天気メッセージの整形
 def format_weather_message(weather, temp):
     messages = {
         "Clear": f"今日は晴れだよ！気温は{temp}℃くらい。おでかけ日和だね〜☀️",
@@ -109,6 +172,7 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"今の天気は{weather}で、気温は{temp}℃くらいだよ！")
 
+# PayPay受け取り自動処理
 def auto_receive_paypay():
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
@@ -137,6 +201,7 @@ def auto_receive_paypay():
     except Exception as e:
         return f"エラーが発生しました: {str(e)}"
 
+# LINEメッセージ送信
 def send_line_reply(reply_token, message):
     url = "https://api.line.me/v2/bot/message/reply"
     headers = {
