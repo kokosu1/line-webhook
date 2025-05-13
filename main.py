@@ -2,18 +2,26 @@ import os
 import requests
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 
-# .envファイルから秘密情報を読み込む
+# .envファイルから環境変数を読み込む
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# 環境変数を取得
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# OpenAIクライアント初期化
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# FastAPIアプリ作成
 app = FastAPI()
+
+# ユーザーモード管理（ChatGPT or 天気）
 user_mode = {}
 
+# 都市マッピング（日本語 → OpenWeatherMap用英語）
 city_mapping = {
     "府中市": "Fuchu",
     "東京": "Tokyo",
@@ -83,11 +91,11 @@ def get_weather(city):
 
 def ask_chatgpt(question):
     try:
-        res = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": question}]
         )
-        return res.choices[0].message["content"].strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"ChatGPTとの通信に失敗しました：{str(e)}"
 
@@ -100,6 +108,4 @@ def send_line_reply(reply_token, message):
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": message}]
     }
-    res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    if res.status_code != 200:
-        print("LINE送信エラー:", res.text)
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
