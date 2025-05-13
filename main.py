@@ -2,6 +2,7 @@ import os
 import requests
 import json
 import random
+import re
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 
@@ -48,7 +49,13 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            if "天気" in text:
+            # PayPayリンクの自動検出
+            paypay_link = detect_paypay_link(text)
+            if paypay_link:
+                result = auto_receive_paypay(paypay_link)
+                send_line_reply(reply_token, result)
+
+            elif "天気" in text:
                 user_mode[user_id] = "weather"
                 send_line_reply(reply_token, "どこの天気を知りたいですか？ 例: 東京、札幌、沖縄 など")
 
@@ -61,25 +68,6 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, message)
                 user_mode[user_id] = None
 
-            elif "おみくじ" in text:
-                result = random.choice(["大吉", "中吉", "小吉", "末吉", "凶", "大凶"])
-                send_line_reply(reply_token, f"おみくじの結果は…「{result}」でした！")
-
-            elif "クイズ" in text:
-                user_mode[user_id] = "quiz_answer"
-                user_mode[user_id + "_answer"] = "栃木"
-                quiz = "次のうち、実際の都道府県はどれ？\n1. 高砂\n2. 豊橋\n3. 栃木\n4. 福岡"
-                send_line_reply(reply_token, quiz)
-
-            elif user_mode.get(user_id) == "quiz_answer":
-                correct = user_mode.get(user_id + "_answer")
-                if text.strip() == correct:
-                    send_line_reply(reply_token, "正解だよ！すごい！")
-                else:
-                    send_line_reply(reply_token, "不正解…また挑戦してみてね！")
-                user_mode[user_id] = None
-                user_mode.pop(user_id + "_answer", None)
-
             elif "じゃんけん" in text:
                 user_mode[user_id] = "janken"
                 buttons = [
@@ -89,12 +77,8 @@ async def webhook(request: Request):
                 ]
                 send_line_buttons_reply(reply_token, "じゃんけんするよ〜！どれを出す？", buttons)
 
-            elif "PayPay" in text:
-                result = auto_receive_paypay()
-                send_line_reply(reply_token, result)
-
             else:
-                send_line_reply(reply_token, "「天気」「おみくじ」「クイズ」「じゃんけん」「PayPay」って言ってみてね！")
+                send_line_reply(reply_token, "「天気」「じゃんけん」「PayPay」って言ってみてね！")
 
         elif event["type"] == "message" and event["message"]["type"] == "location":
             latitude = event["message"]["latitude"]
@@ -104,6 +88,15 @@ async def webhook(request: Request):
 
     return {"status": "ok"}
 
+# PayPayリンク自動検出
+def detect_paypay_link(text):
+    paypay_link_pattern = r'https://paypay.ne.jp/.*'
+    match = re.search(paypay_link_pattern, text)
+    if match:
+        return match.group(0)
+    return None
+
+# 天気情報の取得
 def detect_city(text):
     for jp_name in city_mapping:
         if jp_name in text:
@@ -144,40 +137,7 @@ def format_weather_message(weather, temp):
     }
     return weather_dict.get(weather, f"今の天気は{weather}で、気温は{temp}℃くらいだよ！")
 
-def send_line_reply(reply_token, message):
-    url = "https://api.line.me/v2/bot/message/reply"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": message}]
-    }
-    requests.post(url, headers=headers, json=payload)
-
-def send_line_buttons_reply(reply_token, text, buttons):
-    url = "https://api.line.me/v2/bot/message/reply"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "replyToken": reply_token,
-        "messages": [
-            {
-                "type": "template",
-                "altText": "Buttons template",
-                "template": {
-                    "type": "buttons",
-                    "text": text,
-                    "actions": buttons
-                }
-            }
-        ]
-    }
-    requests.post(url, headers=headers, json=payload)
-
+# じゃんけん結果判定
 def determine_janken_result(user_choice, bot_choice):
     if user_choice == bot_choice:
         return "引き分け"
@@ -188,7 +148,8 @@ def determine_janken_result(user_choice, bot_choice):
     else:
         return "あなたの負け…"
 
-def auto_receive_paypay():
+# PayPay自動受け取り
+def auto_receive_paypay(link):
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
         "Content-Type": "application/json; charset=utf-8",
@@ -215,3 +176,29 @@ def auto_receive_paypay():
             return f"PayPay受け取り失敗: {response.status_code}"
     except Exception as e:
         return f"エラーが発生しました: {str(e)}"
+
+# LINEメッセージ送信
+def send_line_reply(reply_token, message):
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": message}]
+    }
+    requests.post(url, headers=headers, json=payload)
+
+# LINEボタンメッセージ送信
+def send_line_buttons_reply(reply_token, text, buttons):
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}, {"type": "template", "altText": "選択してください", "template": {"type": "buttons", "actions": buttons}}]
+    }
+    requests.post(url, headers=headers, json=payload)
