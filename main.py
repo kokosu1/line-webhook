@@ -38,7 +38,7 @@ def send_line_reply(token, message):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# LINEへのじゃんけんボタン送信
+# じゃんけんボタン
 def send_janken_buttons(token):
     body = {
         "replyToken": token,
@@ -62,7 +62,7 @@ def send_janken_buttons(token):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# じゃんけん結果
+# じゃんけん判定
 def judge_janken(user, bot):
     hands = {"グー": 0, "チョキ": 1, "パー": 2}
     result = (hands[user] - hands[bot]) % 3
@@ -78,25 +78,25 @@ def get_weather_by_city(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
     if res.status_code != 200:
-        return "天気情報の取得に失敗しました。"
+        return "天気情報の取得に失敗しました。都市名を見直してね。"
     data = res.json()
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
- 
+
 def format_weather_message(weather, temp):
     messages = {
-        "Clear": f"☀️ 晴れだよ！気温は約{temp}℃。お出かけ日和だね！",
-        "Clouds": f"☁️ くもり空だよ。気温は{temp}℃くらい。",
+        "Clear": f"☀️ 晴れだよ！気温は{temp}℃。お出かけ日和だね！",
+        "Clouds": f"☁️ くもり空だよ。気温は{temp}℃。今日も一日頑張ろう！",
         "Rain": f"🌧️ 雨が降ってるよ。気温は{temp}℃。傘を忘れずにね！",
-        "Snow": f"❄️ 雪が降ってるよ！気温は{temp}℃、あったかくしてね。",
-        "Thunderstorm": f"⚡ 雷が鳴ってるかも！気温は{temp}℃、気をつけて！",
-        "Drizzle": f"🌦️ 小雨が降ってるよ。気温は{temp}℃くらい。",
+        "Snow": f"❄️ 雪が降ってるよ！気温は{temp}℃。あったかくしてね。",
+        "Thunderstorm": f"⛈️ 雷が鳴ってるかも！気温は{temp}℃。気をつけてね！",
+        "Drizzle": f"🌦️ 小雨が降ってるよ。気温は{temp}℃。傘が必要かも！",
         "Mist": f"🌫️ 霧が出てるよ。気温は{temp}℃。運転には注意してね！"
     }
-    return messages.get(weather, f"現在の天気は「{weather}」で、気温は{temp}℃くらいだよ。")
+    return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
-# 支出記録
+# 支出処理
 def handle_expense(user_id, text):
     match_add = re.match(r"支出 (\S+) (\d+)円$", text)
     match_del = re.match(r"支出 (\S+) (\d+)円 削除$", text)
@@ -107,7 +107,6 @@ def handle_expense(user_id, text):
         expenses.setdefault(user_id, {})
         expenses[user_id][category] = expenses[user_id].get(category, 0) + amount
         return f"{category}に{amount}円を追加しました。"
-
     elif match_del:
         category = match_del.group(1)
         amount = int(match_del.group(2))
@@ -145,33 +144,35 @@ async def webhook(request: Request):
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
 
-        # テキストメッセージ
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
             if "paypay.ne.jp" in text:
-                send_line_reply(reply_token, "PayPayリンクを検出しました（機能準備中）。")
-                return {"status": "ok"}
-
-            if text == "じゃんけん":
-                send_janken_buttons(reply_token)
-                return {"status": "ok"}
-
-            if text == "天気":
-                user_mode[user_id] = "awaiting_city"
-                send_line_reply(reply_token, "どの都市の天気を知りたいですか？例えば「東京」や「大阪」など、都市名を送ってください。")
+                send_line_reply(reply_token, "PayPayリンクを自動検知しました。\n現在この機能は開発中です。完成までお待ちください。")
                 return {"status": "ok"}
 
             if user_mode.get(user_id) == "awaiting_city":
                 city = text
                 city_name = city_mapping.get(city, city)
                 weather_message = get_weather_by_city(city_name)
-                send_line_reply(reply_token, weather_message)
-                user_mode[user_id] = None
+                if "失敗" in weather_message:
+                    send_line_reply(reply_token, weather_message + "\nもう一度都市名を送ってね。")
+                else:
+                    send_line_reply(reply_token, weather_message)
+                    user_mode[user_id] = None
+                return {"status": "ok"}
+
+            if text == "天気":
+                user_mode[user_id] = "awaiting_city"
+                send_line_reply(reply_token, "どの都市の天気を知りたいですか？\n例えば「東京」や「大阪」など、都市名を送ってください。")
+                return {"status": "ok"}
+
+            if text == "じゃんけん":
+                send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
             if text == "支出":
-                send_line_reply(reply_token, "「支出 食費 1000円」や「支出 食費 1000円 削除」で記録できます。集計は「レポート」と送ってね。")
+                send_line_reply(reply_token, "「支出 食費 1000円」や「支出 食費 1000円 削除」で記録できます。\n集計は「レポート」と送ってね。")
                 return {"status": "ok"}
 
             if text.startswith("支出"):
@@ -186,7 +187,6 @@ async def webhook(request: Request):
 
             send_line_reply(reply_token, "「じゃんけん」「天気」「支出」などを試してみてね！")
 
-        # Postback（じゃんけん）
         elif event["type"] == "postback":
             data = event["postback"]["data"]
             if data in ["グー", "チョキ", "パー"]:
