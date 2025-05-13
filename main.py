@@ -83,7 +83,7 @@ def get_weather_by_city(city):
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
-
+ 
 def format_weather_message(weather, temp):
     messages = {
         "Clear": f"☀️ 晴れだよ！気温は約{temp}℃。お出かけ日和だね！",
