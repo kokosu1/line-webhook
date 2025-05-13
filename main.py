@@ -131,11 +131,16 @@ async def webhook(request: Request):
             # 「じゃんけん」モード
             elif "じゃんけん" in text:
                 user_mode[user_id] = "janken"
-                send_line_reply(reply_token, "じゃんけんをしましょう！グー、チョキ、パーのいずれかを送ってください。")
+                buttons = [
+                    {"type": "postback", "label": "グー", "data": "グー"},
+                    {"type": "postback", "label": "チョキ", "data": "チョキ"},
+                    {"type": "postback", "label": "パー", "data": "パー"}
+                ]
+                send_line_buttons_reply(reply_token, "じゃんけんをしましょう！グー、チョキ、パーのいずれかを選んでください。", buttons)
 
             # じゃんけんの処理
-            elif user_mode.get(user_id) == "janken":
-                user_choice = text.strip()
+            elif user_mode.get(user_id) == "janken" and event["type"] == "postback":
+                user_choice = event["postback"]["data"]
                 choices = ["グー", "チョキ", "パー"]
                 bot_choice = random.choice(choices)
                 result = determine_janken_result(user_choice, bot_choice)
@@ -181,25 +186,4 @@ def get_weather(city):
     elif weather == "Snow":
         return f"今日は雪が降ってるみたい！寒いから気をつけてね〜 {temp}℃だよ。❄️"
     else:
-        return f"{temp}℃で天気は{weather}ってなってるよ！"
-
-def determine_janken_result(user_choice, bot_choice):
-    if user_choice == bot_choice:
-        return "あいこ"
-    elif (user_choice == "グー" and bot_choice == "チョキ") or \
-         (user_choice == "チョキ" and bot_choice == "パー") or \
-         (user_choice == "パー" and bot_choice == "グー"):
-        return "あなたの勝ち！"
-    else:
-        return "ボットの勝ち！"
-
-def send_line_reply(reply_token, message):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": message}]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+        return f"{temp}
