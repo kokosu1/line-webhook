@@ -80,6 +80,8 @@ def get_weather_by_city(city):
     if res.status_code != 200:
         return "天気情報の取得に失敗しました。都市名を見直してね。"
     data = res.json()
+    if data.get("cod") != 200:
+        return "指定した都市の天気情報が見つかりませんでした。都市名を再確認してください。"
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
