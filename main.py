@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 import random
@@ -13,79 +14,15 @@ WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 app = FastAPI()
 
+# city_mappingをJSONファイルから読み込む
+def load_city_mapping():
+    with open('city_mapping.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+city_mapping = load_city_mapping()
+
 # ユーザーが「天気」「おみくじ」「クイズ」「じゃんけん」のモードを記録する辞書
 user_mode = {}
-
-# 日本の都道府県と市、ベトナムの都市
-city_mapping = {
-    # 日本の都道府県と市
-    "北海道": "Hokkaido",
-    "青森": "Aomori",
-    "岩手": "Iwate",
-    "宮城": "Miyagi",
-    "秋田": "Akita",
-    "山形": "Yamagata",
-    "福島": "Fukushima",
-    "茨城": "Ibaraki",
-    "栃木": "Tochigi",
-    "群馬": "Gunma",
-    "埼玉": "Saitama",
-    "千葉": "Chiba",
-    "東京": "Tokyo",
-    "神奈川": "Kanagawa",
-    "新潟": "Niigata",
-    "富山": "Toyama",
-    "石川": "Ishikawa",
-    "福井": "Fukui",
-    "山梨": "Yamanashi",
-    "長野": "Nagano",
-    "岐阜": "Gifu",
-    "静岡": "Shizuoka",
-    "愛知": "Aichi",
-    "三重": "Mie",
-    "滋賀": "Shiga",
-    "京都": "Kyoto",
-    "大阪": "Osaka",
-    "兵庫": "Hyogo",
-    "奈良": "Nara",
-    "和歌山": "Wakayama",
-    "鳥取": "Tottori",
-    "島根": "Shimane",
-    "岡山": "Okayama",
-    "広島": "Hiroshima",
-    "山口": "Yamaguchi",
-    "徳島": "Tokushima",
-    "香川": "Kagawa",
-    "愛媛": "Ehime",
-    "高知": "Kochi",
-    "福岡": "Fukuoka",
-    "佐賀": "Saga",
-    "長崎": "Nagasaki",
-    "熊本": "Kumamoto",
-    "大分": "Oita",
-    "宮崎": "Miyazaki",
-    "鹿児島": "Kagoshima",
-    "沖縄": "Okinawa",
-    "府中市": "Fuchu",
-    "札幌": "Sapporo",
-    "名古屋": "Nagoya",
-
-    # ベトナムの都市
-    "ハノイ": "Hanoi",
-    "ホーチミン": "HoChiMinh",
-    "ダナン": "DaNang",
-    "フエ": "Hue",
-    "ハイフォン": "HaiPhong",
-    "カントー": "CanTho",
-    "ビンズオン": "BinhDuong",
-    "バクニン": "BacNinh",
-    "ダラット": "DaLat",
-    "ニャチャン": "NhaTrang",
-    "ホイアン": "HoiAn",
-    "ソクチャン": "SocTrang",
-    "ロングアン": "LongAn",
-    "カイラン": "CaMau"
-}
 
 @app.post("/webhook")
 async def webhook(request: Request):
@@ -132,9 +69,9 @@ async def webhook(request: Request):
             elif "じゃんけん" in text:
                 user_mode[user_id] = "janken"
                 buttons = [
-                    {"type": "postback", "label": "グー", "data": "グー"},
-                    {"type": "postback", "label": "チョキ", "data": "チョキ"},
-                    {"type": "postback", "label": "パー", "data": "パー"}
+                    {"type": "postback", "label": "✊ グー", "data": "グー"},
+                    {"type": "postback", "label": "✌️ チョキ", "data": "チョキ"},
+                    {"type": "postback", "label": "🖐️ パー", "data": "パー"}
                 ]
                 send_line_buttons_reply(reply_token, "じゃんけんをしましょう！グー、チョキ、パーのいずれかを選んでください。", buttons)
 
@@ -186,4 +123,49 @@ def get_weather(city):
     elif weather == "Snow":
         return f"今日は雪が降ってるみたい！寒いから気をつけてね〜 {temp}℃だよ。❄️"
     else:
-        return f"{temp}
+        return f"{temp}℃の気温だよ。"
+
+def send_line_reply(reply_token, message):
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": message}]
+    }
+    requests.post(url, headers=headers, json=payload)
+
+def send_line_buttons_reply(reply_token, text, buttons):
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "template",
+                "altText": "Buttons template",
+                "template": {
+                    "type": "buttons",
+                    "text": text,
+                    "actions": buttons
+                }
+            }
+        ]
+    }
+    requests.post(url, headers=headers, json=payload)
+
+def determine_janken_result(user_choice, bot_choice):
+    # じゃんけんの結果を判定
+    if user_choice == bot_choice:
+        return "引き分け"
+    elif (user_choice == "グー" and bot_choice == "チョキ") or \
+         (user_choice == "チョキ" and bot_choice == "パー") or \
+         (user_choice == "パー" and bot_choice == "グー"):
+        return "あなたの勝ち！"
+    else:
+        return "あなたの負け…"
