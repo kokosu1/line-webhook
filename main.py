@@ -48,6 +48,12 @@ async def webhook(request: Request):
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
+            # 天気
+            if text == "天気":
+                send_line_reply(reply_token, "どの都市の天気を知りたいですか？例えば「東京」や「大阪」など、都市名を送ってください。")
+                user_mode[user_id] = "waiting_for_city"
+                return {"status": "ok"}
+
             # 支出関連
             if text == "支出":
                 send_line_reply(reply_token, "支出を記録するには「支出 食費 1000円」や「支出 食費 1000円 削除」と入力してください。\n集計は「レポート」と送ってね。")
@@ -75,7 +81,7 @@ async def webhook(request: Request):
             if data in ["グー", "チョキ", "パー"]:
                 bot_hand = random.choice(["グー", "チョキ", "パー"])
                 result = judge_janken(data, bot_hand)
-                send_line_reply(reply_token, f"あなた: {data}\nBot: {bot_hand}\n結果: {result}")
+                send_line_reply(reply_token, f"あなた: {data} 🖐️\nBot: {bot_hand} 🤖\n結果: {result}")
                 return {"status": "ok"}
 
     return {"status": "ok"}
@@ -90,17 +96,17 @@ def send_janken_buttons(reply_token):
             "actions": [
                 {
                     "type": "postback",
-                    "label": "グー",
+                    "label": "グー ✊",
                     "data": "グー"
                 },
                 {
                     "type": "postback",
-                    "label": "チョキ",
+                    "label": "チョキ ✌️",
                     "data": "チョキ"
                 },
                 {
                     "type": "postback",
-                    "label": "パー",
+                    "label": "パー 🤚",
                     "data": "パー"
                 }
             ]
@@ -167,17 +173,6 @@ def generate_report(user_id):
 
 def get_weather_from_coordinates(lat, lon):
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
-    res = requests.get(url)
-    if res.status_code != 200:
-        return "天気情報の取得に失敗しました。"
-    data = res.json()
-    weather = data["weather"][0]["main"]
-    temp = round(data["main"]["temp"])
-    return format_weather_message(weather, temp)
-
-def get_weather(city):
-    city_english = city_mapping.get(city, city)  # city_mapping を使用して都市名を英語に変換
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city_english}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
     if res.status_code != 200:
         return "天気情報の取得に失敗しました。"
