@@ -1,131 +1,67 @@
-import os
-import requests
-from fastapi import FastAPI, Request
-from dotenv import load_dotenv
-import openai
-
-# .envファイルから秘密情報を読み込む
-load_dotenv()
-
-# 環境変数からキーを取り出す
-openai.api_key = os.getenv("OPENAI_API_KEY")
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
-
-app = FastAPI()
-
-# ユーザーが「ChatGPT」か「天気」か記録する辞書
-user_mode = {}
-
-# 日本語の市名 → API用英語名
-city_mapping = {
-    "府中市": "Fuchu",
-    "東京": "Tokyo",
-    "札幌": "Sapporo",
-    "大阪": "Osaka",
-    "名古屋": "Nagoya"
-}
-
 @app.post("/webhook")
 async def webhook(request: Request):
     body = await request.json()
     events = body.get("events", [])
 
     for event in events:
+        reply_token = event["replyToken"]
+        user_id = event["source"]["userId"]
+
         if event["type"] == "message" and event["message"]["type"] == "text":
-            user_id = event["source"]["userId"]
             text = event["message"]["text"].strip()
-            reply_token = event["replyToken"]
 
-            print(f"Received message: {text}")  # デバッグ用ログ
-
-            # 「ChatGPT」モードに切り替え
-            if text.lower() == "chatgpt":
-                user_mode[user_id] = "chatgpt"
-                send_line_reply(reply_token, "ChatGPTモードに切り替えたよ！質問してね。")
-            
-            # 「天気」モードに切り替え
-            elif "天気" in text:
-                user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
-            
-            # 天気情報の送信
-            elif user_mode.get(user_id) == "weather":
-                city = detect_city(text)
-                if city == "Unknown":
-                    send_line_reply(reply_token, "指定された都市の天気情報が見つかりませんでした。別の都市を試してみてください。")
+            # 都市入力待ちモード時
+            if user_mode.get(user_id) == "awaiting_city":
+                city = text
+                city_name = city_mapping.get(city, city)
+                weather_message = get_weather_by_city(city_name)
+                send_line_reply(reply_token, weather_message)
+                
+                # 天気取得失敗したらまだモード維持
+                if "天気情報の取得に失敗" in weather_message:
+                    return {"status": "ok"}
                 else:
-                    weather_message = get_weather(city)
-                    send_line_reply(reply_token, weather_message)
-                user_mode[user_id] = None  # 天気情報を送った後、モードをリセット
-            
-            # ChatGPTモードで質問を送信
-            elif user_mode.get(user_id) == "chatgpt":
-                answer = ask_chatgpt(text)
-                send_line_reply(reply_token, answer)
-            
-            # モードが設定されていない場合
-            else:
-                send_line_reply(reply_token, "「天気」または「ChatGPT」と送ってね！")
+                    user_mode[user_id] = None  # 正常取得でモード解除
+                    return {"status": "ok"}
+
+            # 通常のコマンド処理
+            if "paypay.ne.jp" in text:
+                result = handle_paypay_link(text)
+                send_line_reply(reply_token, result)
+                return {"status": "ok"}
+
+            if text == "じゃんけん":
+                send_janken_buttons(reply_token)
+                return {"status": "ok"}
+
+            if text == "天気":
+                user_mode[user_id] = "awaiting_city"
+                send_line_reply(reply_token, "どの都市の天気を知りたいですか？例えば「東京」や「大阪」など、都市名を送ってください。")
+                return {"status": "ok"}
+
+            if text == "支出":
+                send_line_reply(reply_token, "「支出 食費 1000円」や「支出 食費 1000円 削除」で記録できます。集計は「レポート」と送ってね。")
+                return {"status": "ok"}
+
+            if text.startswith("支出"):
+                result = handle_expense(user_id, text)
+                send_line_reply(reply_token, result)
+                return {"status": "ok"}
+
+            if text == "レポート":
+                result = generate_report(user_id)
+                send_line_reply(reply_token, result)
+                return {"status": "ok"}
+
+            # 他の無効な入力
+            send_line_reply(reply_token, "「じゃんけん」「天気」「支出」などを試してみてね！")
+
+        elif event["type"] == "postback":
+            data = event["postback"]["data"]
+            if data in ["グー", "チョキ", "パー"]:
+                bot = random.choice(["グー", "チョキ", "パー"])
+                result = judge_janken(data, bot)
+                message = f"あなた: {data}\nBot: {bot}\n結果: {result}"
+                send_line_reply(reply_token, message)
 
     return {"status": "ok"}
-
-def detect_city(text):
-    # ユーザーが送ったテキストから都市名を検出
-    print(f"Detecting city from: {text}")  # デバッグ用ログ
-    for jp_name in city_mapping:
-        if jp_name in text:
-            print(f"Detected city: {city_mapping[jp_name]}")  # デバッグ用ログ
-            return city_mapping[jp_name]
-    return "Unknown"  # 都市が見つからなかった場合は「Unknown」を返す
-
-def get_weather(city):
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
-    res = requests.get(url)
-    if res.status_code != 200:
-        return "天気情報の取得に失敗しました。"
-    
-    data = res.json()
-    print(f"Weather API response: {data}")  # デバッグ用ログ
-    
-    if "weather" not in data:
-        return "天気情報の取得に失敗しました。"
-
-    weather = data["weather"][0]["main"]
-    temp = round(data["main"]["temp"])
-
-    if weather == "Clear":
-        return f"今日は晴れだよ！{temp}℃くらい。良い一日を！☀️"
-    elif weather == "Clouds":
-        return f"今日はくもりかな〜。気温は{temp}℃くらいだよ。☁️"
-    elif weather in ["Rain", "Drizzle"]:
-        return f"今日は雨っぽいよ。{temp}℃くらいだから傘忘れずにね！☔"
-    elif weather == "Snow":
-        return f"今日は雪が降ってるみたい！寒いから気をつけてね〜 {temp}℃だよ。❄️"
-    else:
-        return f"{temp}℃で天気は{weather}ってなってるよ！"
-
-def ask_chatgpt(question):
-    try:
-        res = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": question}]
-        )
-        return res.choices[0].message["content"].strip()
-    except Exception as e:
-        print(f"Error with ChatGPT: {e}")  # デバッグ用ログ
-        return "ChatGPTとの通信に失敗しました。"
-
-def send_line_reply(reply_token, message):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": message}]
-    }
-    response = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    print(f"LINE API response: {response.status_code}")  # デバッグ用ログ
-    if response.status_code != 200:
-        print(f"Failed to send message: {response.text}")  # エラーメッセージをログに出力
