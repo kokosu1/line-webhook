@@ -1,20 +1,18 @@
 import os
 import requests
 import json
+import random
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
-import random
 
-# .envファイルから秘密情報を読み込む
+# .envファイルから環境変数を読み込む
 load_dotenv()
-
-# 環境変数からキーを取り出す
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 app = FastAPI()
 
-# city_mappingをJSONファイルから読み込む
+# 都市マッピング読み込み
 def load_city_mapping():
     with open('city_mapping.json', 'r', encoding='utf-8') as f:
         return json.load(f)
@@ -31,57 +29,54 @@ async def webhook(request: Request):
         user_id = event["source"]["userId"]
         reply_token = event["replyToken"]
 
-        # postback処理（ボタンが押されたとき）
+        # ポストバック処理（じゃんけんのボタン）
         if event["type"] == "postback":
             data = event["postback"]["data"]
             if user_mode.get(user_id) == "janken":
                 user_choice = data
                 choices = ["グー", "チョキ", "パー"]
-
                 while True:
                     bot_choice = random.choice(choices)
                     result = determine_janken_result(user_choice, bot_choice)
                     if result != "引き分け":
                         break
-
                 send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
                 user_mode[user_id] = None
             return {"status": "ok"}
 
-        # 通常のメッセージ処理
+        # テキストメッセージの処理
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 「天気」モードに切り替え
             if "天気" in text:
                 user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "どこの天気を知りたいですか？例: 東京、名古屋、札幌 など")
+                send_line_reply(reply_token, "どこの天気を知りたいですか？ 例: 東京、札幌、沖縄 など")
 
             elif user_mode.get(user_id) == "weather":
                 city = detect_city(text)
                 if city == "Unknown":
-                    send_line_reply(reply_token, "指定された都市の天気情報が見つかりませんでした。別の都市を試してみてください。")
+                    send_line_reply(reply_token, "指定された都市が見つかりませんでした。他の都市名を試してね！")
                 else:
-                    weather_message = get_weather(city)
-                    send_line_reply(reply_token, weather_message)
+                    message = get_weather(city)
+                    send_line_reply(reply_token, message)
                 user_mode[user_id] = None
 
             elif "おみくじ" in text:
-                result = random.choice(["大吉", "中吉", "小吉", "凶", "大凶"])
-                send_line_reply(reply_token, f"おみくじの結果は「{result}」です！")
+                result = random.choice(["大吉", "中吉", "小吉", "末吉", "凶", "大凶"])
+                send_line_reply(reply_token, f"おみくじの結果は…「{result}」でした！")
 
             elif "クイズ" in text:
                 user_mode[user_id] = "quiz_answer"
                 user_mode[user_id + "_answer"] = "栃木"
-                question = "次のうち、実際の都道府県の名前はどれでしょう？\n1. 高砂\n2. 豊橋\n3. 栃木\n4. 福岡"
-                send_line_reply(reply_token, question)
+                quiz = "次のうち、実際の都道府県はどれ？\n1. 高砂\n2. 豊橋\n3. 栃木\n4. 福岡"
+                send_line_reply(reply_token, quiz)
 
             elif user_mode.get(user_id) == "quiz_answer":
                 correct = user_mode.get(user_id + "_answer")
                 if text.strip() == correct:
-                    send_line_reply(reply_token, "正解です！")
+                    send_line_reply(reply_token, "正解だよ！すごい！")
                 else:
-                    send_line_reply(reply_token, "不正解です。もう一度挑戦してね。")
+                    send_line_reply(reply_token, "不正解…また挑戦してみてね！")
                 user_mode[user_id] = None
                 user_mode.pop(user_id + "_answer", None)
 
@@ -92,16 +87,15 @@ async def webhook(request: Request):
                     {"type": "postback", "label": "✌️ チョキ", "data": "チョキ"},
                     {"type": "postback", "label": "🖐️ パー", "data": "パー"}
                 ]
-                send_line_buttons_reply(reply_token, "じゃんけんをしましょう！グー、チョキ、パーのいずれかを選んでください。", buttons)
+                send_line_buttons_reply(reply_token, "じゃんけんするよ〜！どれを出す？", buttons)
 
             else:
-                send_line_reply(reply_token, "「天気」「おみくじ」「クイズ」「じゃんけん」から選んでください！")
+                send_line_reply(reply_token, "「天気」「おみくじ」「クイズ」「じゃんけん」って言ってみてね！")
 
-        # 位置情報の処理
+        # 位置情報メッセージの処理
         if event["type"] == "message" and event["message"]["type"] == "location":
             latitude = event["message"]["latitude"]
             longitude = event["message"]["longitude"]
-            
             weather_message = get_weather_from_coordinates(latitude, longitude)
             send_line_reply(reply_token, weather_message)
 
@@ -114,7 +108,7 @@ def detect_city(text):
             return city_mapping[jp_name]
     return "Unknown"
 
-# 位置情報を使って天気を取得
+# 緯度経度から天気を取得
 def get_weather_from_coordinates(lat, lon):
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -123,13 +117,9 @@ def get_weather_from_coordinates(lat, lon):
     data = res.json()
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
+    return format_weather_message(weather, temp)
 
-    # 天気状態を日本語に変換
-    weather_jp = translate_weather_to_japanese(weather)
-
-    return f"現在地の天気は{weather_jp}です。気温は{temp}℃です。"
-
-# 天気取得
+# 都市名から天気を取得
 def get_weather(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
@@ -138,26 +128,22 @@ def get_weather(city):
     data = res.json()
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
+    return format_weather_message(weather, temp)
 
-    # 天気状態を日本語に変換
-    weather_jp = translate_weather_to_japanese(weather)
-
-    return f"今日は{weather_jp}です！気温は{temp}℃くらい。"
-
-# 天気状態を日本語に変換
-def translate_weather_to_japanese(weather):
+# 天気をかわいい日本語メッセージに変換
+def format_weather_message(weather, temp):
     weather_dict = {
-        "Clear": "晴れ",
-        "Clouds": "曇り",
-        "Rain": "雨",
-        "Drizzle": "小雨",
-        "Snow": "雪",
-        "Thunderstorm": "雷雨",
-        "Fog": "霧",
-        "Mist": "霧",
-        "Haze": "かすみ"
+        "Clear": f"今日は晴れだよ！気温は{temp}℃くらい。おでかけ日和だね〜☀️",
+        "Clouds": f"今日はくもりかな〜。気温は{temp}℃くらいだよ。のんびり過ごそう☁️",
+        "Rain": f"今日は雨っぽいよ…{temp}℃くらい。傘持ってってね☔",
+        "Drizzle": f"小雨が降ってるみたい！気温は{temp}℃くらい☂️",
+        "Snow": f"今日は雪が降ってるみたい！寒いからあったかくしてね❄️ 気温は{temp}℃だよ。",
+        "Thunderstorm": f"雷雨の予報だよ⚡ 気温は{temp}℃。おうちでゆっくりがいいかも。",
+        "Fog": f"霧が出てるみたい。気温は{temp}℃だよ。車の運転気をつけてね〜",
+        "Mist": f"もやがかかってるみたい。気温は{temp}℃だよ〜",
+        "Haze": f"かすんでるかも。気温は{temp}℃！体調に気をつけてね。"
     }
-    return weather_dict.get(weather, weather)
+    return weather_dict.get(weather, f"今の天気は{weather}で、気温は{temp}℃くらいだよ！")
 
 # テキストメッセージを送信
 def send_line_reply(reply_token, message):
@@ -195,7 +181,7 @@ def send_line_buttons_reply(reply_token, text, buttons):
     }
     requests.post(url, headers=headers, json=payload)
 
-# じゃんけんの勝敗判定
+# じゃんけん判定
 def determine_janken_result(user_choice, bot_choice):
     if user_choice == bot_choice:
         return "引き分け"
