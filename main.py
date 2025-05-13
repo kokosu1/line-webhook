@@ -97,6 +97,14 @@ async def webhook(request: Request):
             else:
                 send_line_reply(reply_token, "「天気」「おみくじ」「クイズ」「じゃんけん」から選んでください！")
 
+        # 位置情報の処理
+        if event["type"] == "message" and event["message"]["type"] == "location":
+            latitude = event["message"]["latitude"]
+            longitude = event["message"]["longitude"]
+            
+            weather_message = get_weather_from_coordinates(latitude, longitude)
+            send_line_reply(reply_token, weather_message)
+
     return {"status": "ok"}
 
 # 都市名を検出
@@ -105,6 +113,18 @@ def detect_city(text):
         if jp_name in text:
             return city_mapping[jp_name]
     return "Unknown"
+
+# 位置情報を使って天気を取得
+def get_weather_from_coordinates(lat, lon):
+    url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
+    res = requests.get(url)
+    if res.status_code != 200:
+        return "天気情報の取得に失敗しました。"
+    data = res.json()
+    weather = data["weather"][0]["main"]
+    temp = round(data["main"]["temp"])
+
+    return f"現在地の天気は{weather}です。気温は{temp}℃です。"
 
 # 天気取得
 def get_weather(city):
