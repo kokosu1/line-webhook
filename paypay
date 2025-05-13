@@ -1,0 +1,59 @@
+import json
+import datetime
+import pytz
+import requests
+import os
+
+def load_headers():
+    with open('paypay/paypay.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def receive_paypay_link(link: str) -> str:
+    headers = load_headers()
+
+    if "https://pay.paypay.ne.jp/" not in link:
+        return "PayPayリンクではありません。"
+
+    pay_code = link.split("https://pay.paypay.ne.jp/")[1].split("\n")[0]
+    params = {'payPayLang': 'ja', 'verificationCode': pay_code}
+    response = requests.get('https://app4.paypay.ne.jp/bff/v2/getP2PLinkInfo', params=params, headers=headers).json()
+
+    if response["header"]["resultCode"] != "S0000":
+        return "リンク取得に失敗しました。"
+
+    status = response["payload"]["orderStatus"]
+    if status == "SUCCESS":
+        return "このリンクはすでに受け取り済みです。"
+
+    if status == "PENDING":
+        info = response["payload"]["pendingP2PInfo"]
+        order_id = info["orderId"]
+        request_id = response["payload"]["message"]["data"]["requestId"]
+        amount = info["amount"]
+        request_at = datetime.datetime.now(pytz.timezone('Asia/Tokyo')).strftime('%Y-%m-%dT%H:%M:%S+0900')
+
+        data = {
+            "requestId": request_id,
+            "orderId": order_id,
+            "verificationCode": pay_code,
+            "requestAt": request_at,
+            "iosMinimumVersion": "3.45.0",
+            "androidMinimumVersion": "3.45.0"
+        }
+
+        if info.get("isSetPasscode", False):
+            return "このリンクにはパスコードが必要です（未対応）"
+
+        result = requests.post(
+            'https://app4.paypay.ne.jp/bff/v2/acceptP2PSendMoneyLink',
+            params=params,
+            headers=headers,
+            json=data
+        ).json()
+
+        if result["header"]["resultCode"] == "S0000":
+            return f"PayPay受け取り成功！{amount}円"
+        else:
+            return "受け取りに失敗しました。"
+
+    return "不明なリンクです。"
