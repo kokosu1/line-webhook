@@ -35,6 +35,18 @@ async def webhook(request: Request):
             text = event["message"]["text"].strip()
             reply_token = event["replyToken"]
 
+if event["type"] == "postback":
+            data = event["postback"]["data"]
+            if user_mode.get(user_id) == "janken":
+                user_choice = data
+                choices = ["グー", "チョキ", "パー"]
+                bot_choice = random.choice(choices)
+                result = determine_janken_result(user_choice, bot_choice)
+                send_line_reply(reply_token, f"あなたの選択: {user_choice}\nボットの選択: {bot_choice}\n結果: {result}")
+                user_mode[user_id] = None
+            return {"status": "ok"}  # 他の処理はスキップ
+
+            
             # 「天気」モードに切り替え
             if "天気" in text:
                 user_mode[user_id] = "weather"
