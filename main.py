@@ -37,8 +37,6 @@ async def webhook(request: Request):
             text = event["message"]["text"].strip()
             reply_token = event["replyToken"]
 
-            print(f"Received message: {text}")  # デバッグ用ログ
-
             # 「ChatGPT」モードに切り替え
             if text.lower() == "chatgpt":
                 user_mode[user_id] = "chatgpt"
@@ -72,10 +70,8 @@ async def webhook(request: Request):
 
 def detect_city(text):
     # ユーザーが送ったテキストから都市名を検出
-    print(f"Detecting city from: {text}")  # デバッグ用ログ
     for jp_name in city_mapping:
         if jp_name in text:
-            print(f"Detected city: {city_mapping[jp_name]}")  # デバッグ用ログ
             return city_mapping[jp_name]
     return "Unknown"  # 都市が見つからなかった場合は「Unknown」を返す
 
@@ -84,13 +80,7 @@ def get_weather(city):
     res = requests.get(url)
     if res.status_code != 200:
         return "天気情報の取得に失敗しました。"
-    
     data = res.json()
-    print(f"Weather API response: {data}")  # デバッグ用ログ
-    
-    if "weather" not in data:
-        return "天気情報の取得に失敗しました。"
-
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
 
@@ -107,14 +97,19 @@ def get_weather(city):
 
 def ask_chatgpt(question):
     try:
+        print(f"質問内容: {question}")  # ログ出力
         res = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": question}]
         )
+        print(f"レスポンス: {res}")  # ログ出力
         return res.choices[0].message["content"].strip()
+    except openai.error.OpenAIError as e:
+        print(f"エラー詳細: {e}")  # ログ出力
+        return f"ChatGPTとの通信に失敗しました。エラー詳細: {e}"
     except Exception as e:
-        print(f"Error with ChatGPT: {e}")  # デバッグ用ログ
-        return "ChatGPTとの通信に失敗しました。"
+        print(f"予期しないエラー: {e}")  # ログ出力
+        return f"予期しないエラーが発生しました: {e}"
 
 def send_line_reply(reply_token, message):
     headers = {
@@ -125,7 +120,4 @@ def send_line_reply(reply_token, message):
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": message}]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    print(f"LINE API response: {response.status_code}")  # デバッグ用ログ
-    if response.status_code != 200:
-        print(f"Failed to send message: {response.text}")  # エラーメッセージをログに出力
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
