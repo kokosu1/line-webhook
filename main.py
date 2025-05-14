@@ -12,8 +12,8 @@ WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 app = FastAPI()
 
-user_mode = {}  # ユーザーごとのモードを保持
-expenses = {}
+user_mode = {}  # ユーザーごとのモード管理
+expenses = {}   # 支出管理
 
 # 都市マッピングの読み込み
 def load_city_mapping():
@@ -36,17 +36,6 @@ def send_line_reply(token, message):
         "messages": [{"type": "text", "text": message}]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-# じゃんけん結果
-def judge_janken(user, bot):
-    hands = {"グー": 0, "チョキ": 1, "パー": 2}
-    result = (hands[user] - hands[bot]) % 3
-    if result == 0:
-        return "あいこ！もう一度！"
-    elif result == 1:
-        return "あなたの負け！"
-    else:
-        return "あなたの勝ち！"
 
 # 天気取得
 def get_weather_by_city(city):
@@ -71,45 +60,6 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」で、気温は{temp}℃くらいだよ。")
 
-# 支出記録
-def handle_expense(user_id, text):
-    match_add = re.match(r"支出 (\S+) (\d+)円$", text)
-    match_del = re.match(r"支出 (\S+) (\d+)円 削除$", text)
-
-    if match_add:
-        category = match_add.group(1)
-        amount = int(match_add.group(2))
-        expenses.setdefault(user_id, {})
-        expenses[user_id][category] = expenses[user_id].get(category, 0) + amount
-        return f"{category}に{amount}円を追加しました。"
-
-    elif match_del:
-        category = match_del.group(1)
-        amount = int(match_del.group(2))
-        if user_id in expenses and category in expenses[user_id]:
-            if expenses[user_id][category] >= amount:
-                expenses[user_id][category] -= amount
-                if expenses[user_id][category] == 0:
-                    del expenses[user_id][category]
-                return f"{category}から{amount}円を削除しました。"
-            else:
-                return f"{category}の金額が足りません。削除できません。"
-        else:
-            return f"{category}は記録されていません。"
-    return "形式が違います。例: 支出 食費 1000円 または 支出 食費 1000円 削除"
-
-# 支出レポート
-def generate_report(user_id):
-    if user_id not in expenses or not expenses[user_id]:
-        return "今月の支出はありません。"
-    report = "今月の支出:\n"
-    total = 0
-    for cat, amt in expenses[user_id].items():
-        report += f"{cat}: {amt}円\n"
-        total += amt
-    report += f"合計: {total}円"
-    return report
-
 # Webhookエンドポイント
 @app.post("/webhook")
 async def webhook(request: Request):
@@ -120,46 +70,53 @@ async def webhook(request: Request):
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
 
-        # テキストメッセージ
+        # メッセージタイプがテキストの場合
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
+            # PayPayリンクの検出
             if "paypay.ne.jp" in text:
                 send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
                 return {"status": "ok"}
 
+            # じゃんけんの場合
             if text == "じゃんけん":
-                send_janken_buttons(reply_token)
+                send_line_reply(reply_token, "じゃんけんを選んでね！")
                 return {"status": "ok"}
 
+            # 天気のリクエスト
             if text == "天気":
-                user_mode[user_id] = "awaiting_city"
+                user_mode[user_id] = "awaiting_city"  # 天気モードに変更
                 send_line_reply(reply_token, "どの都市の天気を知りたいですか？例えば「東京」や「大阪」など、都市名を送ってください。")
                 return {"status": "ok"}
 
+            # 都市名が送られたら天気情報を返す
             if user_mode.get(user_id) == "awaiting_city":
                 city = text
-                city_name = city_mapping.get(city, city)
+                city_name = city_mapping.get(city, city)  # マッピングの確認
                 weather_message = get_weather_by_city(city_name)
                 send_line_reply(reply_token, weather_message)
                 user_mode[user_id] = None  # 天気モードを終了
                 return {"status": "ok"}
 
+            # 支出の場合
             if text == "支出":
                 send_line_reply(reply_token, "「支出 食費 1000円」や「支出 食費 1000円 削除」で記録できます。集計は「レポート」と送ってね。")
                 return {"status": "ok"}
 
+            # 支出金額の追加/削除
             if text.startswith("支出"):
                 result = handle_expense(user_id, text)
                 send_line_reply(reply_token, result)
                 return {"status": "ok"}
 
+            # 支出レポート
             if text == "レポート":
                 result = generate_report(user_id)
                 send_line_reply(reply_token, result)
                 return {"status": "ok"}
 
-        # Postback（じゃんけん）
+        # じゃんけんの場合
         elif event["type"] == "postback":
             data = event["postback"]["data"]
             if data in ["グー", "チョキ", "パー"]:
