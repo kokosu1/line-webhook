@@ -4,78 +4,41 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# ユーザーごとのモード管理
 user_mode = {}
 
-# 都市名と天気の取得処理（例: OpenWeatherMap APIを使う場合）
+# OpenWeatherMap APIで天気取得
 def get_weather_by_city(city):
-    # OpenWeatherMap APIのキーとエンドポイント
-    api_key = "YOUR_API_KEY"
+    api_key = "YOUR_API_KEY"  # あなたのAPIキーに置き換えてください
     base_url = "http://api.openweathermap.org/data/2.5/weather"
     params = {
         'q': city,
         'appid': api_key,
-        'units': 'metric',  # 摂氏温度
+        'units': 'metric',
         'lang': 'ja'
     }
     response = requests.get(base_url, params=params)
     data = response.json()
-
     if response.status_code == 200:
         weather = data['weather'][0]['description']
         temp = data['main']['temp']
-        return f"{city}の天気は {weather} で、気温は {temp}°C です。"
+        return f"{city}の天気は {weather}、気温は {temp}℃です。"
     else:
         return "天気情報の取得に失敗しました。都市名が正しいか確認してください。"
 
-# PayPayリンク自動検出
+# PayPayリンク検出
 def detect_paypay_link(text):
-    if "paypay.ne.jp" in text:
-        return True
-    return False
+    return "paypay.ne.jp" in text
 
-# 支出の管理（簡易版）
-expense_data = {}
-
-def handle_expense(user_id, text):
-    parts = text.split(" ")
-    if len(parts) < 3:
-        return "支出の形式が不正です。例:「支出 食費 1000円」"
-
-    category = parts[1]
-    amount = parts[2]
-
-    # 支出データの保存
-    if user_id not in expense_data:
-        expense_data[user_id] = []
-    expense_data[user_id].append({'category': category, 'amount': amount})
-
-    return f"{category} に {amount} 円を支出として記録しました。"
-
-def generate_report(user_id):
-    if user_id not in expense_data or not expense_data[user_id]:
-        return "まだ支出が記録されていません。"
-    
-    report = "支出レポート:\n"
-    total = 0
-    for expense in expense_data[user_id]:
-        report += f"{expense['category']}: {expense['amount']}円\n"
-        total += int(expense['amount'].replace('円', ''))
-
-    report += f"\n合計: {total}円"
-    return report
-
-# LINE APIにメッセージを送信
 def send_line_reply(reply_token, message):
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer YOUR_CHANNEL_ACCESS_TOKEN"
+        "Authorization": "Bearer YOUR_CHANNEL_ACCESS_TOKEN"  # あなたのトークンに置き換え
     }
     payload = {
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": message}]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, data=json.dumps(payload))
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, data=json.dumps(payload))
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -87,25 +50,24 @@ def webhook():
         user_id = event["source"]["userId"]
         text = event["message"]["text"].strip()
 
-        # PayPayリンクの自動検出
+        # PayPayリンク
         if detect_paypay_link(text):
             send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
             continue
 
-        # じゃんけんボタン
+        # じゃんけん
         if text == "じゃんけん":
             send_line_reply(reply_token, "じゃんけんボタンを押してね！")
             continue
 
-        # 「天気」のリクエスト
+        # 天気リクエスト
         if text == "天気":
-            user_mode[user_id] = "awaiting_city"  # モードを「都市待機」に設定
-            send_line_reply(reply_token, "どの都市の天気を知りたいですか？例:「東京」や「大阪」などの都市名を送ってください。")
+            user_mode[user_id] = "awaiting_city"
+            send_line_reply(reply_token, "どの都市の天気を知りたいですか？ 例：「東京」「大阪」など")
             continue
 
-        # 天気モードで都市名を受け取る
+        # 天気モード：都市名受け取り
         if user_mode.get(user_id) == "awaiting_city":
-            city = text
             city_mapping = {
                 "北海道": "Hokkaido", "青森": "Aomori", "岩手": "Iwate", "宮城": "Miyagi", "秋田": "Akita",
                 "山形": "Yamagata", "福島": "Fukushima", "茨城": "Ibaraki", "栃木": "Tochigi", "群馬": "Gunma",
@@ -117,27 +79,10 @@ def webhook():
                 "香川": "Kagawa", "愛媛": "Ehime", "高知": "Kochi", "福岡": "Fukuoka", "佐賀": "Saga", "長崎": "Nagasaki",
                 "熊本": "Kumamoto", "大分": "Oita", "宮崎": "Miyazaki", "鹿児島": "Kagoshima", "沖縄": "Okinawa"
             }
-            city_name = city_mapping.get(city, city)
-            weather_message = get_weather_by_city(city_name)
-            send_line_reply(reply_token, weather_message)
-            user_mode[user_id] = None  # 天気モード終了後はモードリセット
-            continue
-
-        # 支出機能
-        if text == "支出":
-            send_line_reply(reply_token, "支出を記録します。例: 「支出 食費 1000円」")
-            continue
-
-        # 支出の記録
-        if text.startswith("支出"):
-            result = handle_expense(user_id, text)
-            send_line_reply(reply_token, result)
-            continue
-
-        # 支出レポート
-        if text == "レポート":
-            result = generate_report(user_id)
-            send_line_reply(reply_token, result)
+            city_name = city_mapping.get(text, text)
+            weather = get_weather_by_city(city_name)
+            send_line_reply(reply_token, weather)
+            user_mode[user_id] = None
             continue
 
     return jsonify({"status": "ok"})
