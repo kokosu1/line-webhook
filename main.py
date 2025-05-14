@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import random
 import requests
@@ -13,7 +12,7 @@ WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 app = FastAPI()
 
-user_mode = {}
+user_mode = {}  # ユーザーごとのモードを保持
 expenses = {}
 
 # 都市マッピングの読み込み
@@ -38,30 +37,6 @@ def send_line_reply(token, message):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# LINEへのじゃんけんボタン送信
-def send_janken_buttons(token):
-    body = {
-        "replyToken": token,
-        "messages": [{
-            "type": "template",
-            "altText": "じゃんけんを選んでね",
-            "template": {
-                "type": "buttons",
-                "text": "じゃんけん！どれを出す？",
-                "actions": [
-                    {"type": "postback", "label": "グー ✊", "data": "グー"},
-                    {"type": "postback", "label": "チョキ ✌️", "data": "チョキ"},
-                    {"type": "postback", "label": "パー ✋", "data": "パー"}
-                ]
-            }
-        }]
-    }
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
 # じゃんけん結果
 def judge_janken(user, bot):
     hands = {"グー": 0, "チョキ": 1, "パー": 2}
@@ -83,7 +58,7 @@ def get_weather_by_city(city):
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
     return format_weather_message(weather, temp)
- 
+
 def format_weather_message(weather, temp):
     messages = {
         "Clear": f" 晴れだよ！☀️気温は{temp}℃。お出かけ日和だね！",
@@ -167,7 +142,7 @@ async def webhook(request: Request):
                 city_name = city_mapping.get(city, city)
                 weather_message = get_weather_by_city(city_name)
                 send_line_reply(reply_token, weather_message)
-                user_mode[user_id] = None
+                user_mode[user_id] = None  # 天気モードを終了
                 return {"status": "ok"}
 
             if text == "支出":
