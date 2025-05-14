@@ -10,6 +10,8 @@ load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
+PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
 
 app = FastAPI()
 
@@ -115,6 +117,28 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
+def accept_paypay_link(link_key):
+    url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
+    headers = {
+        "Authorization": PAYPAY_AUTHORIZATION,
+        "Content-Type": "application/json",
+        "Origin": "https://www.paypay.ne.jp",
+        "Referer": f"https://www.paypay.ne.jp/app/p2p/{link_key}",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Cookie": f"token={PAYPAY_TOKEN}"
+    }
+    data = {
+        "linkKey": link_key
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        return response.status_code == 200 and response.json().get("resultStatus") == "SUCCESS"
+    except Exception as e:
+        print("Error accepting PayPay link:", e)
+        return False
+
 @app.post("/webhook")
 async def webhook(request: Request):
     body = await request.json()
@@ -163,7 +187,11 @@ async def webhook(request: Request):
 
             # PayPayリンク検出
             if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
-                send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
+                link_key = text.split("/")[-1]  # 例: https://paypay.ne.jp/app/p2p/MgOmSRoOn52BLzUB
+                if accept_paypay_link(link_key):
+                    send_line_reply(reply_token, "PayPayリンクを受け取りました！")
+                else:
+                    send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
                 return {"status": "ok"}
 
             # じゃんけん
