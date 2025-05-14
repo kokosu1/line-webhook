@@ -115,7 +115,13 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 匿名チャットメッセージ転送
+            # 待機中に終了
+            if text.lower() == "終了" and user_id in anonymous_waiting:
+                anonymous_waiting.remove(user_id)
+                send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
+                return {"status": "ok"}
+
+            # 匿名チャット中の終了・転送
             if user_id in anonymous_rooms:
                 partner_id = anonymous_rooms[user_id]
                 if text.lower() == "終了":
