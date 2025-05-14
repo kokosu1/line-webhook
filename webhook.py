@@ -10,6 +10,7 @@ load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+PAYPAY_API_KEY = os.getenv("PAYPAY_API_KEY")  # PayPayのAPIキー（環境変数）
 
 app = FastAPI()
 
@@ -103,6 +104,23 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
+# PayPayリンク受け取りAPI
+def accept_paypay_link(verification_code, order_id):
+    url = "https://api.paypay.ne.jp/v2/p2p-api/acceptP2PSendMoneyLink"  # PayPayのAPI URL（仮）
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {PAYPAY_API_KEY}"
+    }
+    body = {
+        "orderId": order_id,
+        "verificationCode": verification_code
+    }
+    response = requests.post(url, json=body, headers=headers)
+    if response.status_code == 200:
+        return "PayPayリンクを正常に受け取りました。"
+    else:
+        return f"受け取りに失敗しました。ステータスコード: {response.status_code}"
+
 @app.post("/webhook")
 async def webhook(request: Request):
     body = await request.json()
@@ -115,46 +133,20 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 待機中に終了
-            if text.lower() == "終了" and user_id in anonymous_waiting:
-                anonymous_waiting.remove(user_id)
-                send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
-                return {"status": "ok"}
-
-            # 匿名チャット中の終了・転送
-            if user_id in anonymous_rooms:
-                partner_id = anonymous_rooms[user_id]
-                if text.lower() == "終了":
-                    send_push_message(user_id, "匿名チャットを終了しました。")
-                    send_push_message(partner_id, "相手がチャットを終了しました。")
-                    anonymous_rooms.pop(user_id)
-                    anonymous_rooms.pop(partner_id)
-                else:
-                    send_push_message(partner_id, f"匿名相手: {text}")
-                return {"status": "ok"}
-
-            # 匿名チャット開始
-            if text == "匿名チャット":
-                if user_id in anonymous_waiting:
-                    send_line_reply(reply_token, "マッチングを待機中です。")
-                    return {"status": "ok"}
-                if anonymous_waiting:
-                    partner_id = anonymous_waiting.pop()
-                    anonymous_rooms[user_id] = partner_id
-                    anonymous_rooms[partner_id] = user_id
-                    send_push_message(user_id, "匿名チャットが開始されました。終了したい場合は「終了」と送信してください。")
-                    send_push_message(partner_id, "匿名チャットが開始されました。終了したい場合は「終了」と送信してください。")
-                else:
-                    anonymous_waiting.add(user_id)
-                    send_line_reply(reply_token, "マッチング相手を探しています。しばらくお待ちください。")
-                return {"status": "ok"}
-
-            # PayPayリンク検出
+            # PayPayリンク検出と自動受け取り
             if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
-                send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
+                # リンクからverificationCodeとorderIdを抽出（実際のリンクに合わせて変更）
+                match = re.search(r"verificationCode=(\S+)&orderId=(\S+)", text)
+                if match:
+                    verification_code = match.group(1)
+                    order_id = match.group(2)
+                    result = accept_paypay_link(verification_code, order_id)
+                    send_line_reply(reply_token, result)
+                else:
+                    send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
                 return {"status": "ok"}
 
-            # じゃんけん
+            # その他の処理（じゃんけん、天気など）
             if text == "じゃんけん":
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
