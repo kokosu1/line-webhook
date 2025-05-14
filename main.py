@@ -8,13 +8,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+app = FastAPI()
+
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
-app = FastAPI()
-
-user_mode = {}
-expenses = {}
+user_mode = {}     # ユーザーの現在のモード（天気・支出など）
+expenses = {}      # 支出記録
 
 # 都市マッピングの読み込み
 def load_city_mapping():
@@ -26,11 +26,11 @@ def load_city_mapping():
 
 city_mapping = load_city_mapping()
 
-# LINEにテキスト返信
+# LINEへテキストを返信
 def send_line_reply(token, message):
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
     }
     body = {
         "replyToken": token,
@@ -38,13 +38,17 @@ def send_line_reply(token, message):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# じゃんけんボタン送信
+# じゃんけんボタン表示
 def send_janken_buttons(token):
+    headers = {
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
     body = {
         "replyToken": token,
         "messages": [{
             "type": "template",
-            "altText": "じゃんけんを選んでね",
+            "altText": "じゃんけん！どれを出す？",
             "template": {
                 "type": "buttons",
                 "text": "じゃんけん！どれを出す？",
@@ -56,13 +60,9 @@ def send_janken_buttons(token):
             }
         }]
     }
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# じゃんけん判定
+# じゃんけん勝敗判定
 def judge_janken(user, bot):
     hands = {"グー": 0, "チョキ": 1, "パー": 2}
     result = (hands[user] - hands[bot]) % 3
@@ -78,7 +78,7 @@ def get_weather_by_city(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     res = requests.get(url)
     if res.status_code != 200:
-        return "天気情報の取得に失敗しました。"
+        return "天気情報の取得に失敗しました。都市名が正しいか確認してね。"
     data = res.json()
     weather = data["weather"][0]["main"]
     temp = round(data["main"]["temp"])
@@ -86,28 +86,46 @@ def get_weather_by_city(city):
 
 def format_weather_message(weather, temp):
     messages = {
-        "Clear": f"晴れだよ！☀️ 気温は{temp}℃。お出かけ日和だね！",
-        "Clouds": f"くもりだよ☁️ 気温は{temp}℃。ゆったり過ごそう！",
-        "Rain": f"雨が降ってるよ☔️ 気温は{temp}℃。傘を忘れずに！",
-        "Snow": f"雪だよ❄️ 気温は{temp}℃。あったかくしてね！",
-        "Thunderstorm": f"雷が鳴ってるよ⚡️ 気温は{temp}℃。気をつけて！",
-        "Drizzle": f"小雨が降ってるよ🌦 気温は{temp}℃。",
-        "Mist": f"霧が出てるよ🌫 気温は{temp}℃。"
+        "Clear": f"晴れだよ！☀️ 気温は{temp}℃。",
+        "Clouds": f"くもりだよ☁️ 気温は{temp}℃。",
+        "Rain": f"雨が降ってるよ🌧️ 気温は{temp}℃。",
+        "Snow": f"雪が降ってるよ❄️ 気温は{temp}℃。",
+        "Thunderstorm": f"雷が鳴ってるよ⚡️ 気温は{temp}℃。",
+        "Drizzle": f"小雨が降ってるよ🌦️ 気温は{temp}℃。",
+        "Mist": f"霧が出てるよ🌫️ 気温は{temp}℃。"
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
 # 支出登録
 def handle_expense(user_id, text):
-    match = re.match(r"(.+?)\s+(\d+)", text)
-    if match:
-        category = match.group(1)
-        amount = int(match.group(2))
+    text = text.strip()
+    match_add = re.match(r"(.+?)[\s　]+(\d+)(円)?$", text)
+    match_del = re.match(r"(.+?)[\s　]+(\d+)(円)?[\s　]*削除$", text)
+
+    if match_add:
+        category = match_add.group(1).strip()
+        amount = int(match_add.group(2))
         expenses.setdefault(user_id, {})
         expenses[user_id][category] = expenses[user_id].get(category, 0) + amount
         return f"{category}に{amount}円を追加しました。"
-    return "形式が違います。「食費 1000」のように入力してください。"
 
-# レポート生成
+    elif match_del:
+        category = match_del.group(1).strip()
+        amount = int(match_del.group(2))
+        if user_id in expenses and category in expenses[user_id]:
+            if expenses[user_id][category] >= amount:
+                expenses[user_id][category] -= amount
+                if expenses[user_id][category] == 0:
+                    del expenses[user_id][category]
+                return f"{category}から{amount}円を削除しました。"
+            else:
+                return f"{category}の金額が足りません。"
+        else:
+            return f"{category}は記録されていません。"
+
+    return "形式が違います。「食費 1000」や「交通費 500 削除」のように入力してね。"
+
+# 支出レポート
 def generate_report(user_id):
     if user_id not in expenses or not expenses[user_id]:
         return "今月の支出はありません。"
@@ -119,7 +137,7 @@ def generate_report(user_id):
     report += f"合計: {total}円"
     return report
 
-# Webhookエンドポイント
+# Webhook
 @app.post("/webhook")
 async def webhook(request: Request):
     body = await request.json()
@@ -132,50 +150,55 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
+            # PayPayリンク検出
             if "paypay.ne.jp" in text:
                 send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
                 return {"status": "ok"}
 
+            # じゃんけん
             if text == "じゃんけん":
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
+            # 天気
             if text == "天気":
-                user_mode[user_id] = {"mode": "awaiting_city"}
-                send_line_reply(reply_token, "どの都市の天気を知りたい？（例：東京）")
+                user_mode[user_id] = "awaiting_city"
+                send_line_reply(reply_token, "都市名を送ってね（例：東京・ホーチミン）")
                 return {"status": "ok"}
 
-            if user_mode.get(user_id, {}).get("mode") == "awaiting_city":
+            if user_mode.get(user_id) == "awaiting_city":
                 city = text
                 city_name = city_mapping.get(city, city)
-                weather_message = get_weather_by_city(city_name)
-                send_line_reply(reply_token, weather_message)
+                weather = get_weather_by_city(city_name)
+                send_line_reply(reply_token, weather)
                 user_mode[user_id] = None
                 return {"status": "ok"}
 
+            # 支出
             if text == "支出":
-                user_mode[user_id] = {"mode": "awaiting_expense"}
-                send_line_reply(reply_token, "「食費 1000」のように支出を入力してください。")
+                user_mode[user_id] = "awaiting_expense"
+                send_line_reply(reply_token, "「食費 1000」みたいに入力してね。")
                 return {"status": "ok"}
 
-            if user_mode.get(user_id, {}).get("mode") == "awaiting_expense":
+            if user_mode.get(user_id) == "awaiting_expense":
                 result = handle_expense(user_id, text)
-                send_line_reply(reply_token, result + "\n支出モードを終了します。")
+                send_line_reply(reply_token, result)
                 user_mode[user_id] = None
                 return {"status": "ok"}
 
             if text == "レポート":
-                send_line_reply(reply_token, generate_report(user_id))
+                result = generate_report(user_id)
+                send_line_reply(reply_token, result)
                 return {"status": "ok"}
 
+        # Postback（じゃんけん）
         elif event["type"] == "postback":
-            data = event["postback"]["data"]
-            if data in ["グー", "チョキ", "パー"]:
-                bot = random.choice(["グー", "チョキ", "パー"])
-                result = judge_janken(data, bot)
-                message = f"あなた: {data}\nBot: {bot}\n結果: {result}"
-                send_line_reply(reply_token, message)
-                if result == "あいこ！もう一度！":
-                    send_janken_buttons(reply_token)
+            hand = event["postback"]["data"]
+            bot = random.choice(["グー", "チョキ", "パー"])
+            result = judge_janken(hand, bot)
+            message = f"あなた: {hand}\nBot: {bot}\n結果: {result}"
+            send_line_reply(reply_token, message)
+            if result == "あいこ！もう一度！":
+                send_janken_buttons(reply_token)
 
     return {"status": "ok"}
