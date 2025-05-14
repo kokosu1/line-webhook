@@ -146,6 +146,9 @@ def generate_report(user_id):
     return report
 
 # Webhook
+# ...（略：省略部分は前回のコードと同じです）
+
+# Webhook
 @app.post("/webhook")
 async def webhook(request: Request):
     body = await request.json()
@@ -196,8 +199,8 @@ async def webhook(request: Request):
                 send_line_reply(reply_token, result)
                 return {"status": "ok"}
 
-            # モード未指定
-            send_line_reply(reply_token, "「じゃんけん」「天気」「支出」などを試してみてね！")
+            # 上記以外のメッセージ → 応答なしにする
+            return {"status": "ok"}
 
         # Postback（じゃんけん）
         elif event["type"] == "postback":
