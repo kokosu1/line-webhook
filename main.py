@@ -138,6 +138,14 @@ def generate_report(user_id):
     report += f"合計: {total}円"
     return report
 
+# PayPayリンク自動検出
+def detect_paypay_link(text):
+    # PayPayリンクの正規表現パターン（https://pay.paypay.ne.jp/以降にアルファベット・数字・記号が続く）
+    pattern = r"https://pay\.paypay\.ne\.jp/[A-Za-z0-9]+"
+    if re.search(pattern, text):
+        return True
+    return False
+
 # Webhookエンドポイント
 @app.post("/webhook")
 async def webhook(request: Request):
@@ -152,7 +160,7 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            if "paypay.ne.jp" in text:
+            if detect_paypay_link(text):
                 send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
                 return {"status": "ok"}
 
@@ -174,14 +182,12 @@ async def webhook(request: Request):
                 return {"status": "ok"}
 
             if text == "支出":
-                user_mode[user_id] = "expense_mode"
-                send_line_reply(reply_token, "支出モードになりました。支出のカテゴリと金額を送ってください。例: 食費 1000円")
+                send_line_reply(reply_token, "「支出 食費 1000円」や「支出 食費 1000円 削除」で記録できます。集計は「レポート」と送ってね。")
                 return {"status": "ok"}
 
-            if user_mode.get(user_id) == "expense_mode":
+            if text.startswith("支出"):
                 result = handle_expense(user_id, text)
                 send_line_reply(reply_token, result)
-                user_mode[user_id] = None
                 return {"status": "ok"}
 
             if text == "レポート":
@@ -194,4 +200,8 @@ async def webhook(request: Request):
             data = event["postback"]["data"]
             if data in ["グー", "チョキ", "パー"]:
                 bot = random.choice(["グー", "チョキ", "パー"])
-                result = judge_janken(data
+                result = judge_janken(data, bot)
+                message = f"あなた: {data}\nBot: {bot}\n結果: {result}"
+                send_line_reply(reply_token, message)
+
+    return {"status": "ok"}
