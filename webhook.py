@@ -2,6 +2,7 @@ import os
 import re
 import json
 import random
+import asyncio
 import requests
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
@@ -38,11 +39,11 @@ def send_line_reply(token, message):
         "replyToken": token,
         "messages": [{"type": "text", "text": message}]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    if response.status_code != 200:
-        print(f"Error sending reply: {response.status_code} - {response.text}")
+    res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    if res.status_code != 200:
+        print(f"Reply error: {res.status_code} - {res.text}")
 
-def send_push_message(user_id, message):
+async def send_push_message(user_id, message):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
@@ -51,9 +52,9 @@ def send_push_message(user_id, message):
         "to": user_id,
         "messages": [{"type": "text", "text": message}]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-    if response.status_code != 200:
-        print(f"Error sending push message: {response.status_code} - {response.text}")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: requests.post(
+        "https://api.line.me/v2/bot/message/push", headers=headers, json=body))
 
 def send_janken_buttons(token):
     headers = {
@@ -76,46 +77,36 @@ def send_janken_buttons(token):
             }
         }]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    if response.status_code != 200:
-        print(f"Error sending janken buttons: {response.status_code} - {response.text}")
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
 def judge_janken(user, bot):
     hands = {"グー": 0, "チョキ": 1, "パー": 2}
     result = (hands[user] - hands[bot]) % 3
-    if result == 0:
-        return "あいこ！もう一度！"
-    elif result == 1:
-        return "あなたの負け！"
-    else:
-        return "あなたの勝ち！"
+    return ["あいこ！もう一度！", "あなたの負け！", "あなたの勝ち！"][result]
 
 def get_weather_by_city(city):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric&lang=ja"
     try:
         res = requests.get(url)
         if res.status_code != 200:
-            print(f"Error fetching weather data: {res.status_code} - {res.text}")
+            print(f"Weather API error: {res.status_code} - {res.text}")
             return "天気情報の取得に失敗しました。"
         data = res.json()
         weather = data["weather"][0]["main"]
         temp = round(data["main"]["temp"])
         return format_weather_message(weather, temp)
     except Exception as e:
-        print(f"Error getting weather: {e}")
+        print(f"Weather fetch exception: {e}")
         return "天気情報の取得に失敗しました。"
 
 def format_weather_message(weather, temp):
-    messages = {
-        "Clear": f"晴れだよ！☀️気温は{temp}℃。お出かけ日和だね！",
-        "Clouds": f"くもり空🌤️気温は{temp}℃。今日も一日頑張ろう！",
-        "Rain": f"雨が降ってるよ🌧️気温は{temp}℃。傘を忘れずにね！",
-        "Snow": f"雪が降ってるよ！🌨️気温は{temp}℃、あったかくしてね。",
-        "Thunderstorm": f"雷が鳴ってるかも！⛈️気温は{temp}℃、気をつけて！",
-        "Drizzle": f"小雨が降ってるよ🌦️気温は{temp}℃。傘が必要かもね！",
-        "Mist": f"🌫️霧が出てるよ。気温は{temp}℃。運転には注意してね！"
+    weather_map = {
+        "Clear": "晴れ☀️", "Clouds": "くもり🌤️", "Rain": "雨🌧️",
+        "Snow": "雪🌨️", "Thunderstorm": "雷⛈️", "Drizzle": "小雨🌦️",
+        "Mist": "霧🌫️"
     }
-    return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
+    condition = weather_map.get(weather, weather)
+    return f"現在の天気は「{condition}」、気温は{temp}℃だよ！"
 
 def accept_paypay_link(link_key):
     url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
@@ -124,19 +115,15 @@ def accept_paypay_link(link_key):
         "Content-Type": "application/json",
         "Origin": "https://www.paypay.ne.jp",
         "Referer": f"https://www.paypay.ne.jp/app/p2p/{link_key}",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
-    data = {
-        "linkKey": link_key
-    }
-
+    data = {"linkKey": link_key}
     try:
-        response = requests.post(url, headers=headers, json=data)
-        return response.status_code == 200 and response.json().get("resultStatus") == "SUCCESS"
+        res = requests.post(url, headers=headers, json=data)
+        return res.status_code == 200 and res.json().get("resultStatus") == "SUCCESS"
     except Exception as e:
-        print("Error accepting PayPay link:", e)
+        print("PayPay error:", e)
         return False
 
 @app.post("/webhook")
@@ -151,47 +138,47 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 待機中に終了
-            if text.lower() == "終了" and user_id in anonymous_waiting:
-                anonymous_waiting.remove(user_id)
-                send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
-                return {"status": "ok"}
+            # 匿名チャット終了（チャット中）
+            if text.lower() == "終了":
+                if user_id in anonymous_rooms:
+                    partner_id = anonymous_rooms.pop(user_id)
+                    anonymous_rooms.pop(partner_id, None)
+                    await send_push_message(user_id, "匿名チャットを終了しました。")
+                    await send_push_message(partner_id, "相手がチャットを終了しました。")
+                    return {"status": "ok"}
+                elif user_id in anonymous_waiting:
+                    anonymous_waiting.discard(user_id)
+                    send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
+                    return {"status": "ok"}
 
-            # 匿名チャット中の終了・転送
+            # 匿名チャット中のメッセージ転送
             if user_id in anonymous_rooms:
-                partner_id = anonymous_rooms[user_id]
-                if text.lower() == "終了":
-                    send_push_message(user_id, "匿名チャットを終了しました。")
-                    send_push_message(partner_id, "相手がチャットを終了しました。")
-                    anonymous_rooms.pop(user_id)
-                    anonymous_rooms.pop(partner_id)
-                else:
-                    send_push_message(partner_id, f"匿名相手: {text}")
+                partner_id = anonymous_rooms.get(user_id)
+                if partner_id:
+                    asyncio.create_task(send_push_message(partner_id, f"匿名相手: {text}"))
                 return {"status": "ok"}
 
             # 匿名チャット開始
             if text == "匿名チャット":
                 if user_id in anonymous_waiting:
-                    send_line_reply(reply_token, "マッチングを待機中です。")
+                    send_line_reply(reply_token, "既にマッチング待機中です。")
                     return {"status": "ok"}
                 if anonymous_waiting:
                     partner_id = anonymous_waiting.pop()
                     anonymous_rooms[user_id] = partner_id
                     anonymous_rooms[partner_id] = user_id
-                    send_push_message(user_id, "匿名チャットが開始されました。終了したい場合は「終了」と送信してください。")
-                    send_push_message(partner_id, "匿名チャットが開始されました。終了したい場合は「終了」と送信してください。")
+                    await send_push_message(user_id, "匿名チャットが開始されました。終了したい場合は「終了」と送信してください。")
+                    await send_push_message(partner_id, "匿名チャットが開始されました。終了したい場合は「終了」と送信してください。")
                 else:
                     anonymous_waiting.add(user_id)
                     send_line_reply(reply_token, "マッチング相手を探しています。しばらくお待ちください。")
                 return {"status": "ok"}
 
-            # PayPayリンク検出
+            # PayPayリンク対応
             if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
-                link_key = text.split("/")[-1]  # 例: https://paypay.ne.jp/app/p2p/MgOmSRoOn52BLzUB
-                if accept_paypay_link(link_key):
-                    send_line_reply(reply_token, "PayPayリンクを受け取りました！")
-                else:
-                    send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
+                link_key = text.split("/")[-1]
+                success = accept_paypay_link(link_key)
+                send_line_reply(reply_token, "PayPayリンクを受け取りました！" if success else "リンクから情報を取得できませんでした。")
                 return {"status": "ok"}
 
             # じゃんけん
@@ -199,26 +186,25 @@ async def webhook(request: Request):
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
-            # 天気モード
+            # 天気
             if user_mode.get(user_id) == "awaiting_city":
-                city = text
-                city_name = city_mapping.get(city, city)
-                weather_message = get_weather_by_city(city_name)
-                send_line_reply(reply_token, weather_message)
+                city_name = city_mapping.get(text, text)
+                weather_msg = get_weather_by_city(city_name)
+                send_line_reply(reply_token, weather_msg)
                 user_mode[user_id] = None
                 return {"status": "ok"}
-
             if text == "天気":
                 user_mode[user_id] = "awaiting_city"
-                send_line_reply(reply_token, "どの都市の天気を知りたいですか？例：「東京」「大阪」など")
+                send_line_reply(reply_token, "都市名を教えてください（例：東京、大阪）")
                 return {"status": "ok"}
 
+        # じゃんけんのポストバック処理
         elif event["type"] == "postback":
-            data = event["postback"]["data"]
-            if data in ["グー", "チョキ", "パー"]:
-                bot = random.choice(["グー", "チョキ", "パー"])
-                result = judge_janken(data, bot)
-                send_line_reply(reply_token, f"あなた: {data}\nBot: {bot}\n結果: {result}")
+            hand = event["postback"]["data"]
+            if hand in ["グー", "チョキ", "パー"]:
+                bot_hand = random.choice(["グー", "チョキ", "パー"])
+                result = judge_janken(hand, bot_hand)
+                send_line_reply(reply_token, f"あなた: {hand}\nBot: {bot_hand}\n結果: {result}")
                 return {"status": "ok"}
 
     return {"status": "ok"}
