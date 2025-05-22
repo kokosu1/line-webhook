@@ -121,6 +121,12 @@ def accept_paypay_link(link_key):
     data = {"linkKey": link_key}
     try:
         res = requests.post(url, headers=headers, json=data)
+
+        # 👇 ログ出力を追加
+        print("PayPay APIレスポンス:")
+        print("Status Code:", res.status_code)
+        print("Response Body:", res.text)
+
         return res.status_code == 200 and res.json().get("resultStatus") == "SUCCESS"
     except Exception as e:
         print("PayPay error:", e)
@@ -138,7 +144,7 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 匿名チャット終了（チャット中）
+            # 匿名チャット終了
             if text.lower() == "終了":
                 if user_id in anonymous_rooms:
                     partner_id = anonymous_rooms.pop(user_id)
