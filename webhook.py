@@ -118,15 +118,12 @@ def accept_paypay_link(link_key):
         "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
-    data = {"linkKey": link_key}
+    data = {
+        "linkKey": link_key
+    }
     try:
         res = requests.post(url, headers=headers, json=data)
-
-        # 👇 ログ出力を追加
-        print("PayPay APIレスポンス:")
-        print("Status Code:", res.status_code)
-        print("Response Body:", res.text)
-
+        print("PayPay response:", res.status_code, res.text)  # デバッグ用ログ
         return res.status_code == 200 and res.json().get("resultStatus") == "SUCCESS"
     except Exception as e:
         print("PayPay error:", e)
@@ -157,7 +154,7 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
                     return {"status": "ok"}
 
-            # 匿名チャット中のメッセージ転送
+            # 匿名チャット中のメッセージ
             if user_id in anonymous_rooms:
                 partner_id = anonymous_rooms.get(user_id)
                 if partner_id:
@@ -180,31 +177,31 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "マッチング相手を探しています。しばらくお待ちください。")
                 return {"status": "ok"}
 
-            # PayPayリンク対応
+            # PayPayリンク処理
             if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
                 link_key = text.split("/")[-1]
                 success = accept_paypay_link(link_key)
                 send_line_reply(reply_token, "PayPayリンクを受け取りました！" if success else "リンクから情報を取得できませんでした。")
                 return {"status": "ok"}
 
-            # じゃんけん
+            # じゃんけん処理
             if text == "じゃんけん":
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
-            # 天気
+            # 天気処理
             if user_mode.get(user_id) == "awaiting_city":
                 city_name = city_mapping.get(text, text)
                 weather_msg = get_weather_by_city(city_name)
                 send_line_reply(reply_token, weather_msg)
                 user_mode[user_id] = None
                 return {"status": "ok"}
+
             if text == "天気":
                 user_mode[user_id] = "awaiting_city"
                 send_line_reply(reply_token, "都市名を教えてください（例：東京、大阪）")
                 return {"status": "ok"}
 
-        # じゃんけんのポストバック処理
         elif event["type"] == "postback":
             hand = event["postback"]["data"]
             if hand in ["グー", "チョキ", "パー"]:
