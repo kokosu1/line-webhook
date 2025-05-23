@@ -129,8 +129,13 @@ def accept_paypay_link(link_key):
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
     data = {
-        "linkKey": "dnRm5WfJKe4JOTcd"
+        "linkKey": link_key
     }
+
+    response = requests.post(url, headers=headers, json=data)
+    print(response.status_code)
+    print(response.text)
+    return response.status_code == 200
 
     try:
         response = requests.post(url, headers=headers, json=data)
