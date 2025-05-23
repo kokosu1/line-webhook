@@ -131,7 +131,7 @@ def accept_paypay_link(link_key):
     data = {
         "linkKey": link_key
     }
-
+print("PayPay API response:", response.text)
     response = requests.post(url, headers=headers, json=data)
     print(response.status_code)
     print(response.text)
