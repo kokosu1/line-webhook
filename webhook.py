@@ -129,7 +129,7 @@ def accept_paypay_link(link_key):
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
     data = {
-        "linkKey": dnRm5WfJKe4JOTcd
+        "linkKey": "dnRm5WfJKe4JOTcd"
     }
 
     try:
