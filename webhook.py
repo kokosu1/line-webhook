@@ -10,8 +10,8 @@ load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
-PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
-PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
+PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")  # PayPay API用のAuthorizationヘッダー値
+PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")  # PayPay API用Cookieのtoken
 
 app = FastAPI()
 
@@ -38,9 +38,9 @@ def send_line_reply(token, message):
         "replyToken": token,
         "messages": [{"type": "text", "text": message}]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    if response.status_code != 200:
-        print(f"Error sending reply: {response.status_code} - {response.text}")
+    res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    if res.status_code != 200:
+        print(f"Error sending reply: {res.status_code} - {res.text}")
 
 def send_push_message(user_id, message):
     headers = {
@@ -51,9 +51,9 @@ def send_push_message(user_id, message):
         "to": user_id,
         "messages": [{"type": "text", "text": message}]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-    if response.status_code != 200:
-        print(f"Error sending push message: {response.status_code} - {response.text}")
+    res = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
+    if res.status_code != 200:
+        print(f"Error sending push message: {res.status_code} - {res.text}")
 
 def send_janken_buttons(token):
     headers = {
@@ -76,9 +76,9 @@ def send_janken_buttons(token):
             }
         }]
     }
-    response = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    if response.status_code != 200:
-        print(f"Error sending janken buttons: {response.status_code} - {response.text}")
+    res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    if res.status_code != 200:
+        print(f"Error sending janken buttons: {res.status_code} - {res.text}")
 
 def judge_janken(user, bot):
     hands = {"グー": 0, "チョキ": 1, "パー": 2}
@@ -131,17 +131,15 @@ def accept_paypay_link(link_key):
     data = {
         "linkKey": link_key
     }
-
-    response = requests.post(url, headers=headers, json=data)
-    print(response.status_code)
-    print(response.text)
-    return response.status_code == 200
-
     try:
         response = requests.post(url, headers=headers, json=data)
-        return response.status_code == 200 and response.json().get("resultStatus") == "SUCCESS"
+        if response.status_code == 200 and response.json().get("resultStatus") == "SUCCESS":
+            return True
+        else:
+            print(f"PayPay link accept failed: {response.status_code} - {response.text}")
+            return False
     except Exception as e:
-        print("Error accepting PayPay link:", e)
+        print(f"Error accepting PayPay link: {e}")
         return False
 
 @app.post("/webhook")
@@ -157,7 +155,7 @@ async def webhook(request: Request):
             text = event["message"]["text"].strip()
 
             # 匿名チャット待機キャンセル
-            if text.lower() == "終了" and user_id in anonymous_waiting:
+            if text == "終了" and user_id in anonymous_waiting:
                 anonymous_waiting.remove(user_id)
                 send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
                 return {"status": "ok"}
@@ -165,11 +163,11 @@ async def webhook(request: Request):
             # 匿名チャット中のやり取り・終了
             if user_id in anonymous_rooms:
                 partner_id = anonymous_rooms[user_id]
-                if text.lower() == "終了":
+                if text == "終了":
                     send_push_message(user_id, "匿名チャットを終了しました。")
                     send_push_message(partner_id, "相手がチャットを終了しました。")
-                    anonymous_rooms.pop(user_id)
-                    anonymous_rooms.pop(partner_id)
+                    anonymous_rooms.pop(user_id, None)
+                    anonymous_rooms.pop(partner_id, None)
                 else:
                     send_push_message(partner_id, f"匿名相手: {text}")
                 return {"status": "ok"}
@@ -191,36 +189,29 @@ async def webhook(request: Request):
                 return {"status": "ok"}
 
             # PayPayリンク検出
-            # PayPayリンク検出と処理
-        # PayPayリンク検出
-        if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
-            link_key = text.split("/")[-1]  # URLの最後の部分をlinkKeyとして使う
-            if accept_paypay_link(link_key):
-                send_line_reply(reply_token, "PayPayリンクを受け取りました！")
-            else:
-                send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
-            return {"status": "ok"}
+            match = re.search(r"https://pay\.paypay\.ne\.jp/\S+", text)
+            if match:
+                link_key = text.split("/")[-1]
+                if accept_paypay_link(link_key):
+                    send_line_reply(reply_token, "PayPayリンクを受け取りました！")
+                else:
+                    send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
+                return {"status": "ok"}
 
-        # じゃんけん
-        if text == "じゃんけん":
-            send_janken_buttons(reply_token)
-            return {"status": "ok"}
+            # じゃんけん
+            if text == "じゃんけん":
+                send_janken_buttons(reply_token)
+                return {"status": "ok"}
 
-        # 天気モード
-        if user_mode.get(user_id) == "awaiting_city":
-            city = text
-            city_name = city_mapping.get(city, city)
-            weather_message = get_weather_by_city(city_name)
-            send_line_reply(reply_token, weather_message)
-            user_mode[user_id] = None
-            return {"status": "ok"}
+            # 天気モード
+            if user_mode.get(user_id) == "awaiting_city":
+                city = text
+                city_name = city_mapping.get(city, city)
+                weather_message = get_weather_by_city(city_name)
+                send_line_reply(reply_token, weather_message)
+                user_mode[user_id] = None
+                return {"status": "ok"}
 
-        if text == "天気":
-            user_mode[user_id] = "awaiting_city"
-            send_line_reply(reply_token, "どの都市の天気を知りたいですか？例：「東京」「大阪」など")
-            return {"status": "ok"}
-
-            # 天気コマンド
             if text == "天気":
                 user_mode[user_id] = "awaiting_city"
                 send_line_reply(reply_token, "どの都市の天気を知りたいですか？例：「東京」「大阪」など")
