@@ -109,7 +109,7 @@ def format_weather_message(weather, temp):
     return f"現在の天気は「{condition}」、気温は{temp}℃だよ！"
 
 def accept_paypay_link(link_key):
-    url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
+    url = f"https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink?linkKey={link_key}"
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
         "Content-Type": "application/json",
@@ -118,12 +118,9 @@ def accept_paypay_link(link_key):
         "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
-    data = {
-        "linkKey": link_key
-    }
     try:
-        res = requests.post(url, headers=headers, json=data)
-        print("PayPay response:", res.status_code, res.text)  # デバッグ用ログ
+        res = requests.post(url, headers=headers)
+        print("PayPay response:", res.status_code, res.text)
         return res.status_code == 200 and res.json().get("resultStatus") == "SUCCESS"
     except Exception as e:
         print("PayPay error:", e)
@@ -135,13 +132,13 @@ async def webhook(request: Request):
     events = body.get("events", [])
 
     for event in events:
-        reply_token = event["replyToken"]
-        user_id = event["source"]["userId"]
+        reply_token = event.get("replyToken")
+        user_id = event["source"].get("userId")
 
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 匿名チャット終了
+            # 匿名チャット終了（チャット中）
             if text.lower() == "終了":
                 if user_id in anonymous_rooms:
                     partner_id = anonymous_rooms.pop(user_id)
@@ -154,7 +151,7 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
                     return {"status": "ok"}
 
-            # 匿名チャット中のメッセージ
+            # 匿名チャット中のメッセージ転送
             if user_id in anonymous_rooms:
                 partner_id = anonymous_rooms.get(user_id)
                 if partner_id:
@@ -177,31 +174,31 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "マッチング相手を探しています。しばらくお待ちください。")
                 return {"status": "ok"}
 
-            # PayPayリンク処理
+            # PayPayリンク対応
             if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
                 link_key = text.split("/")[-1]
                 success = accept_paypay_link(link_key)
                 send_line_reply(reply_token, "PayPayリンクを受け取りました！" if success else "リンクから情報を取得できませんでした。")
                 return {"status": "ok"}
 
-            # じゃんけん処理
+            # じゃんけん
             if text == "じゃんけん":
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
-            # 天気処理
+            # 天気
             if user_mode.get(user_id) == "awaiting_city":
                 city_name = city_mapping.get(text, text)
                 weather_msg = get_weather_by_city(city_name)
                 send_line_reply(reply_token, weather_msg)
                 user_mode[user_id] = None
                 return {"status": "ok"}
-
             if text == "天気":
                 user_mode[user_id] = "awaiting_city"
                 send_line_reply(reply_token, "都市名を教えてください（例：東京、大阪）")
                 return {"status": "ok"}
 
+        # じゃんけんのポストバック処理
         elif event["type"] == "postback":
             hand = event["postback"]["data"]
             if hand in ["グー", "チョキ", "パー"]:
