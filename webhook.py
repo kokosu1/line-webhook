@@ -187,12 +187,12 @@ async def webhook(request: Request):
 
             # PayPayリンク検出
             if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
-                link_key = text.split("/")[-1]  # URLの最後の部分をlinkKeyとして使う
-                if accept_paypay_link(link_key):dnRm5WfJKe4JOTcd
-                    send_line_reply(reply_token, "PayPayリンクを受け取りました！")
-                else:
-                    send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
-                return {"status": "ok"}
+    link_key = text.split("/")[-1]  # URLの最後の部分をlinkKeyとして使う
+    if accept_paypay_link(link_key):
+        send_line_reply(reply_token, "PayPayリンクを受け取りました！")
+    else:
+        send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
+    return {"status": "ok"}
 
             # じゃんけん開始
             if text == "じゃんけん":
