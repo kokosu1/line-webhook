@@ -187,27 +187,33 @@ async def webhook(request: Request):
 
             # PayPayリンク検出
             # PayPayリンク検出と処理
-if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
-    link_key = text.split("/")[-1]  # URLの最後の部分をlinkKeyとして使う
-    if accept_paypay_link(link_key):
-        send_line_reply(reply_token, "PayPayリンクを受け取りました！")
-    else:
-        send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
-    return {"status": "ok"}
+        # PayPayリンク検出
+        if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
+            link_key = text.split("/")[-1]  # URLの最後の部分をlinkKeyとして使う
+            if accept_paypay_link(link_key):
+                send_line_reply(reply_token, "PayPayリンクを受け取りました！")
+            else:
+                send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
+            return {"status": "ok"}
 
-            # じゃんけん開始
-            if text == "じゃんけん":
-                send_janken_buttons(reply_token)
-                return {"status": "ok"}
+        # じゃんけん
+        if text == "じゃんけん":
+            send_janken_buttons(reply_token)
+            return {"status": "ok"}
 
-            # 天気モードで都市名待ち
-            if user_mode.get(user_id) == "awaiting_city":
-                city = text
-                city_name = city_mapping.get(city, city)
-                weather_message = get_weather_by_city(city_name)
-                send_line_reply(reply_token, weather_message)
-                user_mode[user_id] = None
-                return {"status": "ok"}
+        # 天気モード
+        if user_mode.get(user_id) == "awaiting_city":
+            city = text
+            city_name = city_mapping.get(city, city)
+            weather_message = get_weather_by_city(city_name)
+            send_line_reply(reply_token, weather_message)
+            user_mode[user_id] = None
+            return {"status": "ok"}
+
+        if text == "天気":
+            user_mode[user_id] = "awaiting_city"
+            send_line_reply(reply_token, "どの都市の天気を知りたいですか？例：「東京」「大阪」など")
+            return {"status": "ok"}
 
             # 天気コマンド
             if text == "天気":
