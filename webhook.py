@@ -139,14 +139,19 @@ def accept_paypay_link(link_key, verification_code):
         "client_uuid": str(uuid.uuid4())
     }
 
+    try:
     response = requests.post(url, headers=headers, json=data)
     print("PayPay API response:", response.status_code, response.text)  # ログ出力
 
-    return response.status_code == 200 and response.json().get("header", {}).get("resultCode") == "S0000"
-        else:
-            print(f"PayPay link accept failed: {response.status_code} - {response.text}")
-            return False
-    except Exception as e:
+    if response.status_code == 200 and response.json().get("header", {}).get("resultCode") == "S0000":
+        return True
+    else:
+        print(f"PayPay link accept failed: {response.status_code} - {response.text}")
+        return False
+
+except Exception as e:
+    print("Exception occurred while accepting PayPay link:", str(e))
+    return False
         print(f"Error accepting PayPay link: {e}")
         return False
 
