@@ -116,7 +116,7 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
-# ここからPayPay送金リンクの詳細取得と受け取り関数
+# PayPay送金リンクの詳細取得と受け取り関数
 
 def get_paypay_link_details(link_key):
     url = f"https://www.paypay.ne.jp/app/v2/p2p-api/getP2PSendMoneyLink/{link_key}"
@@ -252,25 +252,22 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, f"{city} の情報がありません。正しい都市名を送ってください。")
                 return {"status": "ok"}
 
-            # PayPayリンク検出（例: https://paypay.ne.jp/p/abc123 の abc123 部分を抽出）
-            paypay_link_pattern = r"https://pay\.paypay\.ne\.jp/([A-Za-z0-9]+)"
-match = re.search(paypay_link_pattern, text)
-if match:
-    link_key = match.group(1)
-    # 以下省略...
-                # 受け取り処理呼び出し
-                if accept_paypay_link(link_key):
-                    send_line_reply(reply_token, "PayPay送金リンクの受け取りが完了しました。")
-                else:
-                    send_line_reply(reply_token, "PayPay送金リンクの受け取りに失敗しました。")
+            # PayPayリンク検出（例: https://paypay.ne.jp/p2p/s/xxxxxxxxxxxx）
+            m = re.search(r"https://paypay\.ne\.jp/p2p/s/([a-zA-Z0-9]+)", text)
+            if m:
+                link_key = m.group(1)
+                # ここはまだ開発中としてメッセージを返すだけにしておく
+                send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
                 return {"status": "ok"}
 
+            # その他のメッセージ
             if text == "天気":
                 user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "都市名を送ってください（例：東京）")
+                send_line_reply(reply_token, "天気を知りたい都市名を送ってください。")
                 return {"status": "ok"}
 
-            # どれにも該当しない通常メッセージは単純に返す
-            send_line_reply(reply_token, f"すみません、「{text}」には対応していません。")
+            send_line_reply(reply_token, "メニュー: 「匿名チャット」「じゃんけん」「天気」\nPayPayリンク送信はまだ準備中です。")
+            return {"status": "ok"}
 
-    return {"status": "ok"}
+        # 他のeventタイプは無視
+        return {"status": "ok"}
