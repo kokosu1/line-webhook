@@ -117,24 +117,32 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
-def accept_paypay_link(link_key):
+def accept_paypay_link(link_key, verification_code):
     url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
+
     headers = {
-        "Authorization": PAYPAY_AUTHORIZATION,
+        "Authorization": PAYPAY_AUTHORIZATION,  # .envから読み込む
         "Content-Type": "application/json",
         "Origin": "https://www.paypay.ne.jp",
         "Referer": f"https://www.paypay.ne.jp/app/p2p/{link_key}",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Cookie": f"token={PAYPAY_TOKEN}"
+        "Cookie": f"token={PAYPAY_TOKEN}"  # .envから読み込む
     }
+
     data = {
-        "linkKey": link_key
+        "orderId": "",  # 例: "02003356172650070025"
+        "verificationCode": verification_code,
+        "requestId": str(uuid.uuid4()),
+        "senderMessageId": str(uuid.uuid4()),
+        "senderChannelUrl": str(uuid.uuid4()),
+        "client_uuid": str(uuid.uuid4())
     }
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200 and response.json().get("resultStatus") == "SUCCESS":
-            return True
+
+    response = requests.post(url, headers=headers, json=data)
+    print("PayPay API response:", response.status_code, response.text)  # ログ出力
+
+    return response.status_code == 200 and response.json().get("header", {}).get("resultCode") == "S0000"
         else:
             print(f"PayPay link accept failed: {response.status_code} - {response.text}")
             return False
