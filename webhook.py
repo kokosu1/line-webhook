@@ -127,7 +127,7 @@ def accept_paypay_link(link_key, verification_code=""):
     }
     data = {
         "orderId": "02003380035487449098",
-        "verificationCode": verification_code,
+        "verificationCode": "glFdFQcz3noyvrWZ",
         "requestId": str(uuid.uuid4()),
         "senderMessageId": str(uuid.uuid4()),
         "senderChannelUrl": str(uuid.uuid4()),
