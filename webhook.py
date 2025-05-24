@@ -15,9 +15,9 @@ PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
 
 app = FastAPI()
 
-user_mode = {}
-anonymous_waiting = set()
-anonymous_rooms = {}
+user_mode = {}            # ユーザーごとのモード管理（例: janken, weather）
+anonymous_waiting = set() # 匿名チャット待機中ユーザー
+anonymous_rooms = {}      # 匿名チャットマッチング済みペア {user_id: partner_id}
 
 def load_city_mapping():
     try:
@@ -187,21 +187,25 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 匿名チャット処理
-            if text == "終了" and user_id in anonymous_waiting:
-                anonymous_waiting.remove(user_id)
-                send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
-                return {"status": "ok"}
-            if user_id in anonymous_rooms:
-                partner_id = anonymous_rooms[user_id]
-                if text == "終了":
+            # --- 匿名チャット処理 ---
+            if text == "終了":
+                if user_id in anonymous_waiting:
+                    anonymous_waiting.remove(user_id)
+                    send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
+                    return {"status": "ok"}
+                elif user_id in anonymous_rooms:
+                    partner_id = anonymous_rooms[user_id]
                     send_push_message(user_id, "匿名チャットを終了しました。")
                     send_push_message(partner_id, "相手がチャットを終了しました。")
                     anonymous_rooms.pop(user_id, None)
                     anonymous_rooms.pop(partner_id, None)
-                else:
-                    send_push_message(partner_id, f"匿名相手: {text}")
+                    return {"status": "ok"}
+
+            if user_id in anonymous_rooms:
+                partner_id = anonymous_rooms[user_id]
+                send_push_message(partner_id, f"匿名相手: {text}")
                 return {"status": "ok"}
+
             if text == "匿名チャット":
                 if user_id in anonymous_waiting:
                     send_line_reply(reply_token, "すでに待機中です。")
@@ -216,7 +220,7 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "匿名チャットの相手を待っています。終了したいときは「終了」と送ってください。")
                 return {"status": "ok"}
 
-            # じゃんけん処理
+            # --- じゃんけん処理 ---
             if text == "じゃんけん":
                 user_mode[user_id] = "janken"
                 send_janken_buttons(reply_token)
@@ -235,11 +239,10 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "グー、チョキ、パーのどれかを送ってください。")
                     return {"status": "ok"}
 
-            # 天気モード
+            # --- 天気モード ---
             if user_mode.get(user_id) == "weather":
                 city = text
                 user_mode.pop(user_id, None)
-                # city_mapping.jsonで市町村名に対応する緯度経度があれば利用可能（省略）
                 weather_msg = get_weather_by_city(city)
                 send_line_reply(reply_token, weather_msg)
                 return {"status": "ok"}
@@ -248,7 +251,7 @@ async def webhook(request: Request):
                 send_line_reply(reply_token, "天気を知りたい都市名を入力してください。")
                 return {"status": "ok"}
 
-            # PayPay送金リンク受け取り判定
+            # --- PayPay送金リンク受け取り ---
             paypay_link_match = re.search(r"paypay\.ne\.jp\/.*\/(\w+)", text)
             if paypay_link_match:
                 link_key = paypay_link_match.group(1)
@@ -259,7 +262,7 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "PayPay送金リンクの受け取りに失敗しました。")
                 return {"status": "ok"}
 
-            # その他メッセージ
+            # --- その他 ---
             send_line_reply(reply_token, "すみません、よくわかりませんでした。コマンドを送ってください。")
             return {"status": "ok"}
 
