@@ -132,9 +132,11 @@ def get_paypay_link_details(link_key):
             order_id = data.get("data", {}).get("orderId")
             verification_code = data.get("data", {}).get("verificationCode")
             return order_id, verification_code
-        return None, None
+        else:
+            print(f"PayPay get link failed: {res.status_code} - {res.text}")
+            return None, None
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error in get_paypay_link_details: {e}")
         return None, None
 
 def accept_paypay_link(link_key):
@@ -159,9 +161,18 @@ def accept_paypay_link(link_key):
     }
     try:
         res = requests.post(url, headers=headers, json=data)
-        return res.status_code == 200 and res.json().get("header", {}).get("resultCode") == "S0000"
+        if res.status_code == 200:
+            result = res.json()
+            if result.get("header", {}).get("resultCode") == "S0000":
+                return True
+            else:
+                print(f"PayPay accept failed: {result}")
+                return False
+        else:
+            print(f"PayPay accept HTTP error: {res.status_code} - {res.text}")
+            return False
     except Exception as e:
-        print(f"Exception: {e}")
+        print(f"Exception in accept_paypay_link: {e}")
         return False
 
 @app.post("/webhook")
@@ -176,7 +187,7 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 匿名チャット
+            # 匿名チャット処理
             if text == "終了" and user_id in anonymous_waiting:
                 anonymous_waiting.remove(user_id)
                 send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
@@ -205,7 +216,7 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "匿名チャットの相手を待っています。終了したいときは「終了」と送ってください。")
                 return {"status": "ok"}
 
-            # じゃんけん
+            # じゃんけん処理
             if text == "じゃんけん":
                 user_mode[user_id] = "janken"
                 send_janken_buttons(reply_token)
@@ -214,39 +225,42 @@ async def webhook(request: Request):
                 if text in ["グー", "チョキ", "パー"]:
                     bot_hand = random.choice(["グー", "チョキ", "パー"])
                     result = judge_janken(text, bot_hand)
-                    send_line_reply(reply_token, f"あなた: {text}\nBot: {bot_hand}\n{result}")
-                    if not result.startswith("あいこ"):
-                        user_mode.pop(user_id)
+                    send_line_reply(reply_token, f"あなた: {text}\nBot: {bot_hand}\n結果: {result}")
+                    if result == "あいこ！もう一度！":
+                        send_janken_buttons(reply_token)
+                    else:
+                        user_mode.pop(user_id, None)
+                    return {"status": "ok"}
                 else:
-                    send_line_reply(reply_token, "「グー」「チョキ」「パー」から選んでね！")
-                return {"status": "ok"}
+                    send_line_reply(reply_token, "グー、チョキ、パーのどれかを送ってください。")
+                    return {"status": "ok"}
 
-            # 天気
-            if text == "天気":
-                user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "都市名を送ってください（例：東京）")
-                return {"status": "ok"}
+            # 天気モード
             if user_mode.get(user_id) == "weather":
                 city = text
-                if city in city_mapping:
-                    msg = get_weather_by_city(city)
-                    send_line_reply(reply_token, msg)
-                    user_mode.pop(user_id)
-                else:
-                    send_line_reply(reply_token, f"{city} は対応していません。")
+                user_mode.pop(user_id, None)
+                # city_mapping.jsonで市町村名に対応する緯度経度があれば利用可能（省略）
+                weather_msg = get_weather_by_city(city)
+                send_line_reply(reply_token, weather_msg)
+                return {"status": "ok"}
+            if text == "天気":
+                user_mode[user_id] = "weather"
+                send_line_reply(reply_token, "天気を知りたい都市名を入力してください。")
                 return {"status": "ok"}
 
-            # PayPayリンク
-            match = re.search(r"https://pay\.paypay\.ne\.jp/([A-Za-z0-9]+)", text)
-            if match:
-                link_key = match.group(1)
+            # PayPay送金リンク受け取り判定
+            paypay_link_match = re.search(r"paypay\.ne\.jp\/.*\/(\w+)", text)
+            if paypay_link_match:
+                link_key = paypay_link_match.group(1)
+                send_line_reply(reply_token, "PayPay送金リンクの受け取り処理を開始します。少々お待ちください。")
                 if accept_paypay_link(link_key):
-                    send_line_reply(reply_token, "PayPay送金リンクの受け取りが完了しました。")
+                    send_line_reply(reply_token, "PayPay送金リンクの受け取りに成功しました！")
                 else:
                     send_line_reply(reply_token, "PayPay送金リンクの受け取りに失敗しました。")
                 return {"status": "ok"}
 
-            # デフォルト応答
-            send_line_reply(reply_token, f"すみません、「{text}」には対応していません。")
+            # その他メッセージ
+            send_line_reply(reply_token, "すみません、よくわかりませんでした。コマンドを送ってください。")
+            return {"status": "ok"}
 
     return {"status": "ok"}
