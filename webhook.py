@@ -2,6 +2,7 @@ import os
 import re
 import json
 import random
+import uuid
 import requests
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
@@ -10,8 +11,8 @@ load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
-PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")  # PayPay API用のAuthorizationヘッダー値
-PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")  # PayPay API用Cookieのtoken
+PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
+PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
 
 app = FastAPI()
 
@@ -117,21 +118,21 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
-def accept_paypay_link(link_key, verification_code):
+def accept_paypay_link(link_key, verification_code=""):
     url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
 
     headers = {
-        "Authorization": PAYPAY_AUTHORIZATION,  # .envから読み込む
+        "Authorization": PAYPAY_AUTHORIZATION,
         "Content-Type": "application/json",
         "Origin": "https://www.paypay.ne.jp",
         "Referer": f"https://www.paypay.ne.jp/app/p2p/{link_key}",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Cookie": f"token={PAYPAY_TOKEN}"  # .envから読み込む
+        "Cookie": f"token={PAYPAY_TOKEN}"
     }
 
     data = {
-        "orderId": "",  # 例: "02003356172650070025"
+        "orderId": "",
         "verificationCode": verification_code,
         "requestId": str(uuid.uuid4()),
         "senderMessageId": str(uuid.uuid4()),
@@ -140,19 +141,17 @@ def accept_paypay_link(link_key, verification_code):
     }
 
     try:
-    response = requests.post(url, headers=headers, json=data)
-    print("PayPay API response:", response.status_code, response.text)  # ログ出力
+        response = requests.post(url, headers=headers, json=data)
+        print("PayPay API response:", response.status_code, response.text)
 
-    if response.status_code == 200 and response.json().get("header", {}).get("resultCode") == "S0000":
-        return True
-    else:
-        print(f"PayPay link accept failed: {response.status_code} - {response.text}")
-        return False
+        if response.status_code == 200 and response.json().get("header", {}).get("resultCode") == "S0000":
+            return True
+        else:
+            print(f"PayPay link accept failed: {response.status_code} - {response.text}")
+            return False
 
-except Exception as e:
-    print("Exception occurred while accepting PayPay link:", str(e))
-    return False
-        print(f"Error accepting PayPay link: {e}")
+    except Exception as e:
+        print("Exception occurred while accepting PayPay link:", str(e))
         return False
 
 @app.post("/webhook")
@@ -167,13 +166,11 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
-            # 匿名チャット待機キャンセル
             if text == "終了" and user_id in anonymous_waiting:
                 anonymous_waiting.remove(user_id)
                 send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
                 return {"status": "ok"}
 
-            # 匿名チャット中のやり取り・終了
             if user_id in anonymous_rooms:
                 partner_id = anonymous_rooms[user_id]
                 if text == "終了":
@@ -185,7 +182,6 @@ async def webhook(request: Request):
                     send_push_message(partner_id, f"匿名相手: {text}")
                 return {"status": "ok"}
 
-            # 匿名チャット開始
             if text == "匿名チャット":
                 if user_id in anonymous_waiting:
                     send_line_reply(reply_token, "マッチングを待機中です。")
@@ -201,7 +197,6 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "マッチング相手を探しています。しばらくお待ちください。")
                 return {"status": "ok"}
 
-            # PayPayリンク検出
             match = re.search(r"https://pay\.paypay\.ne\.jp/\S+", text)
             if match:
                 link_key = text.split("/")[-1]
@@ -211,12 +206,10 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "リンクから情報を取得できませんでした。")
                 return {"status": "ok"}
 
-            # じゃんけん
             if text == "じゃんけん":
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
 
-            # 天気モード
             if user_mode.get(user_id) == "awaiting_city":
                 city = text
                 city_name = city_mapping.get(city, city)
