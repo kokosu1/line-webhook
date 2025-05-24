@@ -16,13 +16,8 @@ PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
 
 app = FastAPI()
 
-# ユーザーモード管理（天気の都市入力待ちなど）
 user_mode = {}
-
-# 匿名チャット待機中ユーザーID集合
 anonymous_waiting = set()
-
-# 匿名チャット中のペアリング辞書 {user_id: partner_id}
 anonymous_rooms = {}
 
 def load_city_mapping():
@@ -113,18 +108,23 @@ def format_weather_message(weather, temp):
     condition = weather_map.get(weather, weather)
     return f"現在の天気は「{condition}」、気温は{temp}℃だよ！"
 
-def accept_paypay_link(link_key):
-    url = f"https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink?linkKey={link_key}"
+def accept_paypay_link(order_id, verification_code):
+    url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
         "Content-Type": "application/json",
         "Origin": "https://www.paypay.ne.jp",
-        "Referer": f"https://www.paypay.ne.jp/app/p2p/{link_key}",
+        "Referer": "https://www.paypay.ne.jp/app/p2p/",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
+    body = {
+        "orderId": order_id,
+        "verificationCode": verification_code,
+        "deviceType": "WEB"
+    }
     try:
-        res = requests.post(url, headers=headers)
+        res = requests.post(url, headers=headers, json=body)
         print("PayPay response:", res.status_code, res.text)
         return res.status_code == 200 and res.json().get("resultStatus") == "SUCCESS"
     except Exception as e:
@@ -179,12 +179,19 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "マッチング相手を探しています。しばらくお待ちください。")
                 return {"status": "ok"}
 
-            # PayPayリンク対応
-            if re.search(r"https://pay\.paypay\.ne\.jp/\S+", text):
-                link_key = text.split("/")[-1]
-                success = accept_paypay_link(link_key)
-                send_line_reply(reply_token, "PayPayリンクを受け取りました！" if success else "リンクから情報を取得できませんでした。")
-                return {"status": "ok"}
+            # PayPayリンク自動受け取り（orderId + verificationCode抽出）
+            if "orderId" in text and "verificationCode" in text:
+                try:
+                    order_id_match = re.search(r'"orderId"\s*:\s*"(\d+)"', text)
+                    verification_match = re.search(r'"verificationCode"\s*:\s*"([A-Za-z0-9]+)"', text)
+                    if order_id_match and verification_match:
+                        order_id = order_id_match.group(1)
+                        verification_code = verification_match.group(1)
+                        success = accept_paypay_link(order_id, verification_code)
+                        send_line_reply(reply_token, "PayPay受け取り成功！" if success else "受け取り失敗しました。")
+                        return {"status": "ok"}
+                except Exception as e:
+                    print("Error extracting PayPay data:", e)
 
             # じゃんけん
             if text == "じゃんけん":
