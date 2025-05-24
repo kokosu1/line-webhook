@@ -39,9 +39,7 @@ def send_line_reply(token, message):
         "replyToken": token,
         "messages": [{"type": "text", "text": message}]
     }
-    res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    if res.status_code != 200:
-        print(f"Error sending reply: {res.status_code} - {res.text}")
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
 def send_push_message(user_id, message):
     headers = {
@@ -52,9 +50,7 @@ def send_push_message(user_id, message):
         "to": user_id,
         "messages": [{"type": "text", "text": message}]
     }
-    res = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
-    if res.status_code != 200:
-        print(f"Error sending push message: {res.status_code} - {res.text}")
+    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=body)
 
 def send_janken_buttons(token):
     headers = {
@@ -77,9 +73,7 @@ def send_janken_buttons(token):
             }
         }]
     }
-    res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-    if res.status_code != 200:
-        print(f"Error sending janken buttons: {res.status_code} - {res.text}")
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
 def judge_janken(user, bot):
     hands = {"グー": 0, "チョキ": 1, "パー": 2}
@@ -96,14 +90,12 @@ def get_weather_by_city(city):
     try:
         res = requests.get(url)
         if res.status_code != 200:
-            print(f"Error fetching weather data: {res.status_code} - {res.text}")
             return "天気情報の取得に失敗しました。"
         data = res.json()
         weather = data["weather"][0]["main"]
         temp = round(data["main"]["temp"])
         return format_weather_message(weather, temp)
-    except Exception as e:
-        print(f"Error getting weather: {e}")
+    except:
         return "天気情報の取得に失敗しました。"
 
 def format_weather_message(weather, temp):
@@ -118,21 +110,44 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
-def accept_paypay_link(link_key, verification_code=""):
-    url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
-
+def get_paypay_link_info(link_key):
+    url = "https://www.paypay.ne.jp/app/v2/p2p-api/getP2PSendMoneyLink"
     headers = {
         "Authorization": PAYPAY_AUTHORIZATION,
         "Content-Type": "application/json",
         "Origin": "https://www.paypay.ne.jp",
         "Referer": f"https://www.paypay.ne.jp/app/p2p/{link_key}",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0",
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
+    data = {"linkKey": link_key}
+    try:
+        res = requests.post(url, headers=headers, json=data)
+        if res.status_code == 200:
+            json_data = res.json()
+            order_id = json_data.get("body", {}).get("orderId", "")
+            verification_code = json_data.get("body", {}).get("verificationCode", "")
+            return order_id, verification_code
+    except Exception as e:
+        print("Error getting PayPay link info:", e)
+    return None, None
 
+def accept_paypay_link(link_key):
+    order_id, verification_code = get_paypay_link_info(link_key)
+    if not order_id:
+        return False
+
+    url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
+    headers = {
+        "Authorization": PAYPAY_AUTHORIZATION,
+        "Content-Type": "application/json",
+        "Origin": "https://www.paypay.ne.jp",
+        "Referer": f"https://www.paypay.ne.jp/app/p2p/{link_key}",
+        "User-Agent": "Mozilla/5.0",
+        "Cookie": f"token={PAYPAY_TOKEN}"
+    }
     data = {
-        "orderId": "",
+        "orderId": order_id,
         "verificationCode": verification_code,
         "requestId": str(uuid.uuid4()),
         "senderMessageId": str(uuid.uuid4()),
@@ -142,17 +157,11 @@ def accept_paypay_link(link_key, verification_code=""):
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        print("PayPay API response:", response.status_code, response.text)
-
         if response.status_code == 200 and response.json().get("header", {}).get("resultCode") == "S0000":
             return True
-        else:
-            print(f"PayPay link accept failed: {response.status_code} - {response.text}")
-            return False
-
     except Exception as e:
-        print("Exception occurred while accepting PayPay link:", str(e))
-        return False
+        print("Error accepting PayPay:", e)
+    return False
 
 @app.post("/webhook")
 async def webhook(request: Request):
