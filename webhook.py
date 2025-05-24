@@ -253,10 +253,11 @@ async def webhook(request: Request):
                 return {"status": "ok"}
 
             # PayPayリンク検出（例: https://paypay.ne.jp/p/abc123 の abc123 部分を抽出）
-            paypay_link_pattern = r"https://paypay\.ne\.jp/p/([A-Za-z0-9]+)"
-            match = re.search(paypay_link_pattern, text)
-            if match:
-                link_key = match.group(1)
+            paypay_link_pattern = r"https://pay\.paypay\.ne\.jp/([A-Za-z0-9]+)"
+match = re.search(paypay_link_pattern, text)
+if match:
+    link_key = match.group(1)
+    # 以下省略...
                 # 受け取り処理呼び出し
                 if accept_paypay_link(link_key):
                     send_line_reply(reply_token, "PayPay送金リンクの受け取りが完了しました。")
