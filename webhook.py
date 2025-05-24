@@ -126,7 +126,7 @@ def accept_paypay_link(link_key, verification_code=""):
         "Cookie": f"token={PAYPAY_TOKEN}"
     }
     data = {
-        "orderId": "",
+        "orderId": "02003380035487449098",
         "verificationCode": verification_code,
         "requestId": str(uuid.uuid4()),
         "senderMessageId": str(uuid.uuid4()),
