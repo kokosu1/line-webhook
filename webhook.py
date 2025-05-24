@@ -16,8 +16,13 @@ PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
 
 app = FastAPI()
 
+# ユーザーモード管理（天気の都市入力待ちなど）
 user_mode = {}
+
+# 匿名チャット待機中ユーザーID集合
 anonymous_waiting = set()
+
+# 匿名チャット中のペアリング辞書 {user_id: partner_id}
 anonymous_rooms = {}
 
 def load_city_mapping():
