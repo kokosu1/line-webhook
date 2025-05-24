@@ -69,9 +69,9 @@ def send_janken_buttons(token):
                 "type": "buttons",
                 "text": "じゃんけん！どれを出す？",
                 "actions": [
-                    {"type": "postback", "label": "グー ✊", "data": "グー"},
-                    {"type": "postback", "label": "チョキ ✌️", "data": "チョキ"},
-                    {"type": "postback", "label": "パー ✋", "data": "パー"}
+                    {"type": "message", "label": "グー ✊", "text": "グー"},
+                    {"type": "message", "label": "チョキ ✌️", "text": "チョキ"},
+                    {"type": "message", "label": "パー ✋", "text": "パー"}
                 ]
             }
         }]
@@ -116,8 +116,6 @@ def format_weather_message(weather, temp):
     }
     return messages.get(weather, f"現在の天気は「{weather}」、気温は{temp}℃くらいだよ。")
 
-# PayPay送金リンクの詳細取得と受け取り関数
-
 def get_paypay_link_details(link_key):
     url = f"https://www.paypay.ne.jp/app/v2/p2p-api/getP2PSendMoneyLink/{link_key}"
     headers = {
@@ -133,24 +131,16 @@ def get_paypay_link_details(link_key):
             data = res.json()
             order_id = data.get("data", {}).get("orderId")
             verification_code = data.get("data", {}).get("verificationCode")
-            if order_id and verification_code:
-                return order_id, verification_code
-            else:
-                print("orderId or verificationCode not found in response")
-                return None, None
-        else:
-            print(f"Failed to get link details: {res.status_code} {res.text}")
-            return None, None
+            return order_id, verification_code
+        return None, None
     except Exception as e:
-        print(f"Exception in get_paypay_link_details: {e}")
+        print(f"Error: {e}")
         return None, None
 
 def accept_paypay_link(link_key):
     order_id, verification_code = get_paypay_link_details(link_key)
     if not order_id or not verification_code:
-        print("Cannot accept link: missing orderId or verificationCode")
         return False
-
     url = "https://www.paypay.ne.jp/app/v2/p2p-api/acceptP2PSendMoneyLink"
     headers = {
         "Content-Type": "application/json",
@@ -168,17 +158,11 @@ def accept_paypay_link(link_key):
         "client_uuid": str(uuid.uuid4())
     }
     try:
-        response = requests.post(url, headers=headers, json=data)
-        print("PayPay API response:", response.status_code, response.text)
-        if response.status_code == 200 and response.json().get("header", {}).get("resultCode") == "S0000":
-            return True
-        else:
-            return False
+        res = requests.post(url, headers=headers, json=data)
+        return res.status_code == 200 and res.json().get("header", {}).get("resultCode") == "S0000"
     except Exception as e:
-        print("Exception occurred while accepting PayPay link:", str(e))
+        print(f"Exception: {e}")
         return False
-
-# Webhook
 
 @app.post("/webhook")
 async def webhook(request: Request):
@@ -192,11 +176,11 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
+            # 匿名チャット
             if text == "終了" and user_id in anonymous_waiting:
                 anonymous_waiting.remove(user_id)
                 send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
                 return {"status": "ok"}
-
             if user_id in anonymous_rooms:
                 partner_id = anonymous_rooms[user_id]
                 if text == "終了":
@@ -207,67 +191,62 @@ async def webhook(request: Request):
                 else:
                     send_push_message(partner_id, f"匿名相手: {text}")
                 return {"status": "ok"}
-
             if text == "匿名チャット":
                 if user_id in anonymous_waiting:
-                    send_line_reply(reply_token, "すでに待機中です。しばらくお待ちください。")
+                    send_line_reply(reply_token, "すでに待機中です。")
+                elif anonymous_waiting:
+                    partner = anonymous_waiting.pop()
+                    anonymous_rooms[user_id] = partner
+                    anonymous_rooms[partner] = user_id
+                    send_line_reply(reply_token, "匿名チャットが開始されました。")
+                    send_push_message(partner, "匿名チャットが開始されました。")
                 else:
-                    if anonymous_waiting:
-                        partner_id = anonymous_waiting.pop()
-                        anonymous_rooms[user_id] = partner_id
-                        anonymous_rooms[partner_id] = user_id
-                        send_line_reply(reply_token, "匿名チャットが開始されました。メッセージをどうぞ！")
-                        send_push_message(partner_id, "匿名チャットが開始されました。メッセージをどうぞ！")
-                    else:
-                        anonymous_waiting.add(user_id)
-                        send_line_reply(reply_token, "匿名チャットの相手を待っています。終了するには「終了」と送ってください。")
+                    anonymous_waiting.add(user_id)
+                    send_line_reply(reply_token, "匿名チャットの相手を待っています。終了したいときは「終了」と送ってください。")
                 return {"status": "ok"}
 
+            # じゃんけん
             if text == "じゃんけん":
                 user_mode[user_id] = "janken"
                 send_janken_buttons(reply_token)
                 return {"status": "ok"}
-
             if user_mode.get(user_id) == "janken":
                 if text in ["グー", "チョキ", "パー"]:
                     bot_hand = random.choice(["グー", "チョキ", "パー"])
-                    result_msg = judge_janken(text, bot_hand)
-                    send_line_reply(reply_token, f"あなた: {text}\nBot: {bot_hand}\n{result_msg}")
-                    if result_msg.startswith("あいこ"):
-                        send_janken_buttons(reply_token)
-                    else:
-                        user_mode.pop(user_id, None)
-                    return {"status": "ok"}
+                    result = judge_janken(text, bot_hand)
+                    send_line_reply(reply_token, f"あなた: {text}\nBot: {bot_hand}\n{result}")
+                    if not result.startswith("あいこ"):
+                        user_mode.pop(user_id)
                 else:
-                    send_line_reply(reply_token, "グー、チョキ、パーのいずれかを選んでください。")
-                    return {"status": "ok"}
+                    send_line_reply(reply_token, "「グー」「チョキ」「パー」から選んでね！")
+                return {"status": "ok"}
 
+            # 天気
+            if text == "天気":
+                user_mode[user_id] = "weather"
+                send_line_reply(reply_token, "都市名を送ってください（例：東京）")
+                return {"status": "ok"}
             if user_mode.get(user_id) == "weather":
                 city = text
                 if city in city_mapping:
-                    weather_msg = get_weather_by_city(city)
-                    send_line_reply(reply_token, weather_msg)
-                    user_mode.pop(user_id, None)
+                    msg = get_weather_by_city(city)
+                    send_line_reply(reply_token, msg)
+                    user_mode.pop(user_id)
                 else:
-                    send_line_reply(reply_token, f"{city} の情報がありません。正しい都市名を送ってください。")
+                    send_line_reply(reply_token, f"{city} は対応していません。")
                 return {"status": "ok"}
 
-            # PayPayリンク検出（例: https://paypay.ne.jp/p2p/s/xxxxxxxxxxxx）
-            m = re.search(r"https://paypay\.ne\.jp/p2p/s/([a-zA-Z0-9]+)", text)
-            if m:
-                link_key = m.group(1)
-                # ここはまだ開発中としてメッセージを返すだけにしておく
-                send_line_reply(reply_token, "現在この機能は開発中です。完成までお待ちください。")
+            # PayPayリンク
+            match = re.search(r"https://pay\.paypay\.ne\.jp/([A-Za-z0-9]+)", text)
+            if match:
+                link_key = match.group(1)
+                if accept_paypay_link(link_key):
+                    send_line_reply(reply_token, "PayPay送金リンクの受け取りが完了しました。")
+                else:
+                    send_line_reply(reply_token, "PayPay送金リンクの受け取りに失敗しました。")
                 return {"status": "ok"}
 
-            # その他のメッセージ
-            if text == "天気":
-                user_mode[user_id] = "weather"
-                send_line_reply(reply_token, "天気を知りたい都市名を送ってください。")
-                return {"status": "ok"}
+            # デフォルト応答
+            send_line_reply(reply_token, f"すみません、「{text}」には対応していません。")
 
-            send_line_reply(reply_token, "メニュー: 「匿名チャット」「じゃんけん」「天気」\nPayPayリンク送信はまだ準備中です。")
-            return {"status": "ok"}
-
-        # 他のeventタイプは無視
-        return {"status": "ok"}
+    return {"status": "ok"}
