@@ -1,5 +1,3 @@
-# Save the full code into a single file for user download
-code = '''
 import os
 import re
 import json
@@ -178,6 +176,7 @@ async def webhook(request: Request):
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
 
+            # 匿名チャット
             if text == "終了" and user_id in anonymous_waiting:
                 anonymous_waiting.remove(user_id)
                 send_line_reply(reply_token, "匿名チャットの待機をキャンセルしました。")
@@ -206,6 +205,7 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "匿名チャットの相手を待っています。終了したいときは「終了」と送ってください。")
                 return {"status": "ok"}
 
+            # じゃんけん
             if text == "じゃんけん":
                 user_mode[user_id] = "janken"
                 send_janken_buttons(reply_token)
@@ -221,6 +221,7 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, "「グー」「チョキ」「パー」から選んでね！")
                 return {"status": "ok"}
 
+            # 天気
             if text == "天気":
                 user_mode[user_id] = "weather"
                 send_line_reply(reply_token, "都市名を送ってください（例：東京）")
@@ -235,22 +236,17 @@ async def webhook(request: Request):
                     send_line_reply(reply_token, f"{city} は対応していません。")
                 return {"status": "ok"}
 
-            match = re.search(r"https://pay\\.paypay\\.ne\\.jp/([A-Za-z0-9]+)", text)
+            # PayPayリンク
+            match = re.search(r"https://pay\.paypay\.ne\.jp/([A-Za-z0-9]+)", text)
             if match:
                 link_key = match.group(1)
                 if accept_paypay_link(link_key):
                     send_line_reply(reply_token, "PayPay送金リンクの受け取りが完了しました。")
                 else:
-                    send_line_reply(reply_token, "PayPay送金リンクの受け取りに失敗しました。\n有効なリンクか、すでに受け取っていないか確認してください。")
+                    send_line_reply(reply_token, "PayPay送金リンクの受け取りに失敗しました。")
                 return {"status": "ok"}
 
+            # デフォルト応答
             send_line_reply(reply_token, f"すみません、「{text}」には対応していません。")
 
     return {"status": "ok"}
-'''
-
-path = "/mnt/data/main.py"
-with open(path, "w", encoding="utf-8") as f:
-    f.write(code)
-
-path
