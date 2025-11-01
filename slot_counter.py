@@ -4,14 +4,14 @@ from fastapi import FastAPI, Request
 app = FastAPI()
 
 # ===============================
-# データ定義
+# データ構造
 # ===============================
 stats = {
     "total": 0, "grape": 0, "big": 0, "reg": 0,
     "miss": 0, "replay": 0,
-    "mode": "idle",     # idle / input_info / playing
+    "mode": "idle",     # 現在の会話状態
     "machine": None,    # 機種名
-    "setting_data": {}  # 設定ごとの確率表
+    "setting_data": {}, # 機種ごとの設定確率
 }
 
 # 機種データ例
@@ -23,6 +23,14 @@ machine_info = {
         "設定4": {"合算": 1/160.5, "ぶどう": 1/6.20},
         "設定5": {"合算": 1/156.5, "ぶどう": 1/6.15},
         "設定6": {"合算": 1/150.5, "ぶどう": 1/6.10},
+    },
+    "アイムジャグラー": {
+        "設定1": {"合算": 1/176.2, "ぶどう": 1/6.49},
+        "設定2": {"合算": 1/172.4, "ぶどう": 1/6.45},
+        "設定3": {"合算": 1/168.5, "ぶどう": 1/6.40},
+        "設定4": {"合算": 1/164.5, "ぶどう": 1/6.35},
+        "設定5": {"合算": 1/160.5, "ぶどう": 1/6.30},
+        "設定6": {"合算": 1/156.5, "ぶどう": 1/6.25},
     },
 }
 
@@ -38,27 +46,88 @@ async def callback(request: Request):
 
     reply_text = ""
 
-    # --- スタート ---
+    # --- スタート（リセットして台質問）---
     if text == "スタート":
-        stats["mode"] = "input_info"
-        reply_text = "🎰 打つ台の名前を教えてください（例：マイジャグラーV）"
+        stats.update({
+            "total": 0, "grape": 0, "big": 0, "reg": 0,
+            "miss": 0, "replay": 0,
+            "machine": None, "setting_data": {},
+            "mode": "ask_machine"
+        })
+        reply_text = "🎰 なんの台ですか？（例：マイジャグラーV / アイムジャグラー）"
 
-    # --- 台情報入力モード ---
-    elif stats["mode"] == "input_info":
-        machine_name = text.replace("台", "").strip()
-        if machine_name in machine_info:
-            stats["machine"] = machine_name
-            stats["setting_data"] = machine_info[machine_name]
-            stats["mode"] = "playing"
-
-            info_text = "📊 参考設定データ\n"
-            for s, v in stats["setting_data"].items():
-                info_text += f"{s}: 合算 1/{1/v['合算']:.1f} / ぶどう 1/{1/v['ぶどう']:.2f}\n"
-            reply_text = f"✅ {machine_name} を選択しました！\n\n{info_text}\n\nカウント開始できます。"
+    # --- 台名入力 ---
+    elif stats["mode"] == "ask_machine":
+        if text in machine_info:
+            stats["machine"] = text
+            stats["setting_data"] = machine_info[text]
+            stats["mode"] = "ask_total"
+            reply_text = f"🧮 {text}ですね。総回転数を入力してください。"
         else:
-            reply_text = "⚠️ その機種はデータがありません。『マイジャグラーV』などを入力してね。"
+            reply_text = "⚠️ その台データはまだ登録されていません。マイジャグラーV か アイムジャグラー で試してみてください。"
 
-    # --- プレイ中（カウンター機能）---
+    # --- 総回転数入力 ---
+    elif stats["mode"] == "ask_total":
+        if text.isdigit():
+            stats["total"] = int(text)
+            stats["mode"] = "ask_big"
+            reply_text = "🎯 BIG回数を入力してください。"
+        else:
+            reply_text = "⚠️ 数字で入力してください（例：2350）"
+
+    # --- BIG入力 ---
+    elif stats["mode"] == "ask_big":
+        if text.isdigit():
+            stats["big"] = int(text)
+            stats["mode"] = "ask_reg"
+            reply_text = "💡 REG回数を入力してください。"
+        else:
+            reply_text = "⚠️ 数字で入力してください。"
+
+    # --- REG入力 ---
+    elif stats["mode"] == "ask_reg":
+        if text.isdigit():
+            stats["reg"] = int(text)
+            stats["mode"] = "confirm"
+
+            total = stats["total"]
+            big = stats["big"]
+            reg = stats["reg"]
+            combined = big + reg
+            bonus_rate = total / combined if combined > 0 else 0
+
+            # 設定推測
+            guess = "−"
+            diffs = {}
+            for s, v in stats["setting_data"].items():
+                diff = abs((1/v["合算"]) - (1/bonus_rate)) if bonus_rate else 999
+                diffs[s] = diff
+            guess = min(diffs, key=diffs.get)
+
+            reply_text = (
+                f"✅ 台データ確認\n"
+                f"機種：{stats['machine']}\n"
+                f"総回転数：{total}\n"
+                f"BIG：{big} / REG：{reg}\n"
+                f"推定設定：{guess}\n\n"
+                f"この台でスタートしますか？（はい / いいえ）"
+            )
+        else:
+            reply_text = "⚠️ 数字で入力してください。"
+
+    # --- 確認 ---
+    elif stats["mode"] == "confirm":
+        if text == "はい":
+            stats["mode"] = "playing"
+            reply_text = (
+                f"🎰 {stats['machine']}でカウント開始します！\n"
+                f"『ぶどう』『BIG』『REG』『ハズレ』『リプレイ』など送ってください。"
+            )
+        else:
+            stats["mode"] = "idle"
+            reply_text = "キャンセルしました。『スタート』でやり直せます。"
+
+    # --- カウントモード ---
     elif stats["mode"] == "playing":
         if text == "ぶどう":
             stats["grape"] += 1
@@ -80,48 +149,33 @@ async def callback(request: Request):
             stats["replay"] += 1
             stats["total"] += 1
             reply_text = "🔁 リプレイカウント！"
-
-        # 結果表示
-        elif text in ["カウント", "結果", "計算"]:
+        elif text in ["カウント", "結果"]:
             grape_rate = stats["total"]/stats["grape"] if stats["grape"] else None
             bonus_rate = stats["total"]/(stats["big"]+stats["reg"]) if (stats["big"]+stats["reg"]) else None
-            miss_rate = stats["total"]/stats["miss"] if stats["miss"] else None
 
-            # 設定推測ロジック
-            setting_guess = "−"
-            if grape_rate and bonus_rate and stats["setting_data"]:
+            guess = "−"
+            if grape_rate and bonus_rate:
                 diffs = {}
                 for s, v in stats["setting_data"].items():
                     diff = abs((1/v["合算"]) - (1/bonus_rate)) + abs((1/v["ぶどう"]) - (1/grape_rate))
                     diffs[s] = diff
-                setting_guess = min(diffs, key=diffs.get)
+                guess = min(diffs, key=diffs.get)
 
             reply_text = (
-                f"🎰 現在の集計（{stats['machine']}）\n"
+                f"📊 現在の状況\n"
                 f"総回転数：{stats['total']}\n"
                 f"🍇ぶどう確率：{'1/'+str(round(grape_rate,2)) if grape_rate else '−'}\n"
-                f"❌ハズレ確率：{'1/'+str(round(miss_rate,2)) if miss_rate else '−'}\n"
                 f"🎯ボーナス合算：{'1/'+str(round(bonus_rate,2)) if bonus_rate else '−'}\n"
-                f"BIG：{stats['big']} / REG：{stats['reg']}\n\n"
-                f"🔍推定設定：{setting_guess}"
+                f"BIG：{stats['big']} / REG：{stats['reg']}\n"
+                f"🔍推定設定：{guess}"
             )
-
-        elif text == "リセット":
-            for key in ["total","grape","big","reg","miss","replay"]:
-                stats[key] = 0
-            reply_text = "🧹 データをリセットしました。"
         else:
-            reply_text = (
-                "🕹 コマンド一覧：\n"
-                "ぶどう / ハズレ / リプレイ / BIG / REG\n"
-                "カウント → 集計表示\n"
-                "リセット → 全データ初期化"
-            )
+            reply_text = "🕹 カウント中です。『カウント』で集計を表示します。"
 
-    # --- 何もしてない状態 ---
+    # --- 初期状態 ---
     else:
-        reply_text = "💬『スタート』で台を選んでカウントを始めてください！"
+        reply_text = "💬 『スタート』で台選択から始められます！"
 
-    # 返信（LINE SDKのsend_messageに置き換えて）
+    # 返信関数呼び出し（あなたの環境用に）
     reply_message(reply_token, reply_text)
     return "OK"
