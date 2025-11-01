@@ -57,7 +57,7 @@ async def callback(request: Request):
         user = users[user_id]
 
         # --- スタート ---
-        if text.lower() in ["スタート", "start"]:
+        if text.strip().lower() in ["スタート", "start"]:
             user["mode"] = "input_machine"
             user["data"] = {}
             reply_message(reply_token, "🎰 何の台ですか？（例：マイジャグラーV、アイムジャグラーなど）")
