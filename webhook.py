@@ -1,3 +1,19 @@
+@app.post("/webhook")
+async def webhook(request: Request):
+    body = await request.json()
+    events = body.get("events", [])
+
+    for event in events:
+        reply_token = event.get("replyToken")
+        user_id = event["source"].get("userId")
+        
+        # ← ここに追加（ユーザーIDをログに出力）
+        print(f"👤 ユーザーID: {user_id}")
+
+        if event["type"] == "message" and event["message"]["type"] == "text":
+            text = event["message"]["text"].strip()
+            # 以下は既存のコード...
+
 import os
 import re
 import json
