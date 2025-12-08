@@ -1,19 +1,3 @@
-@app.post("/webhook")
-async def webhook(request: Request):
-    body = await request.json()
-    events = body.get("events", [])
-
-    for event in events:
-        reply_token = event.get("replyToken")
-        user_id = event["source"].get("userId")
-        
-        # ← ここに追加（ユーザーIDをログに出力）
-        print(f"👤 ユーザーID: {user_id}")
-
-        if event["type"] == "message" and event["message"]["type"] == "text":
-            text = event["message"]["text"].strip()
-            # 以下は既存のコード...
-
 import os
 import re
 import json
@@ -30,7 +14,7 @@ WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
 PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
 
-app = FastAPI()
+app = FastAPI()  # ← この行があることを確認
 
 user_mode = {}
 anonymous_waiting = set()
@@ -155,6 +139,9 @@ async def webhook(request: Request):
     for event in events:
         reply_token = event.get("replyToken")
         user_id = event["source"].get("userId")
+        
+        # ユーザーIDをログ出力
+        print(f"👤 ユーザーID: {user_id}")
 
         if event["type"] == "message" and event["message"]["type"] == "text":
             text = event["message"]["text"].strip()
