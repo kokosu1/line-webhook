@@ -11,3 +11,8 @@ fastapi==0.95.1
 requests==2.28.1
 python-dotenv==1.0.0
 uvicorn==0.18.3  # 必要に応じて追加
+google-auth
+google-auth-oauthlib
+google-api-python-client
+APScheduler
+
