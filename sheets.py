@@ -6,8 +6,9 @@ from datetime import datetime
 import calendar
 
 SCOPES = [
-“https://www.googleapis.com/auth/spreadsheets”,
-“https://www.googleapis.com/auth/drive”
+"https://www.googleapis.com/auth/spreadsheets",
+"https://www.googleapis.com/auth/drive"
+
 ]
 
 # 環境変数からGoogle認証情報を取得
