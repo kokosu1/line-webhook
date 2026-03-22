@@ -15,6 +15,7 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 PAYPAY_AUTHORIZATION = os.getenv("PAYPAY_AUTHORIZATION")
 PAYPAY_TOKEN = os.getenv("PAYPAY_TOKEN")
+ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 
 app = FastAPI()  # ← この行があることを確認
 
@@ -202,7 +203,6 @@ async def webhook(request: Request):
                     print("Error extracting PayPay data:", e)
                     
             # シフト手動送信（管理者のみ）
-                ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
             if user_id == ADMIN_USER_ID:
                 if text == "シフト送信 前半":
                     from scheduler import send_shift_request
