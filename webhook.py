@@ -224,4 +224,4 @@ async def webhook(request: Request):
                 send_line_reply(reply_token, f"あなた: {hand}\nBot: {bot_hand}\n結果: {result}")
                 return {"status": "ok"}
 
-    return {"status": "ok"}
+        return {"status": "ok"}
