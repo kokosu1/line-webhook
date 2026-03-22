@@ -213,7 +213,7 @@ async def webhook(request: Request):
                     send_shift_request("second")
                     send_line_reply(reply_token, "後半のシフト通知を送信しました！")
                     return {"status": "ok"}
-                    elif text.startswith("名前追加 "):
+                elif text.startswith("名前追加 "):
                     new_name = text.replace("名前追加 ", "").strip()
                     if new_name:
                         from liff_names import add_name
