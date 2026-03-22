@@ -160,12 +160,31 @@
 <script>
   // =====================
   // ★ここにスタッフの名前を入れてください★
-  const STAFF_NAMES = [
-    "田中", "鈴木", "佐藤", "山田", "伊藤",
-    "渡辺", "中村", "小林", "加藤", "吉田",
-    "山本", "松本", "井上", "木村", "林"
-    // 人数に合わせて編集してください
-  ];
+  let STAFF_NAMES = [];
+
+async function loadNames() {
+    const res = await fetch("/staff-names");
+    const data = await res.json();
+    STAFF_NAMES = data.names;
+    renderNameGrid();
+}
+
+function renderNameGrid() {
+    const nameGrid = document.getElementById("name-grid");
+    nameGrid.innerHTML = "";
+    STAFF_NAMES.forEach(name => {
+        const btn = document.createElement("button");
+        btn.className = "name-btn";
+        btn.textContent = name;
+        btn.onclick = () => {
+            document.querySelectorAll(".name-btn").forEach(b => b.classList.remove("selected"));
+            btn.classList.add("selected");
+            selectedName = name;
+            setTimeout(() => showDateSection(), 300);
+        };
+        nameGrid.appendChild(btn);
+    });
+}
 
   // バックエンドのURL（RenderのURLに変更してください）
   const API_URL = "https://line-webhook-5u4x.onrender.com/shift/submit";
@@ -283,7 +302,9 @@
   };
 
   // LIFF初期化
-  liff.init({ liffId: "2009560202-FLkeeE5H" }).catch(err => {
+  liff.init({ liffId: "2009560202-FLkeeE5H" }).then(() => {
+    loadNames();
+  }).catch(err => {
     console.error("LIFF init error:", err);
   });
 </script>
