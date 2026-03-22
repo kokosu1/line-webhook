@@ -142,7 +142,7 @@ async def webhook(request: Request):
         
         # ユーザーIDをログ出力
         group_id = event["source"].get("groupId")
-if group_id:
+        if group_id:
         print(f"👤 ユーザーID: {user_id}")
 
         if event["type"] == "message" and event["message"]["type"] == "text":
