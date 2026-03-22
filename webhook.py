@@ -287,3 +287,9 @@ async def shift_submit(request: Request):
 @app.get("/liff")
 async def liff_page():
     return FileResponse("liff/index.html")
+from liff_names import get_names
+
+@app.get("/staff-names")
+async def staff_names():
+    names = get_names()
+    return {"names": names}
