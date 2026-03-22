@@ -6,6 +6,7 @@ import asyncio
 import requests
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
+from sheets import write_shift
 
 load_dotenv()
 
@@ -226,3 +227,23 @@ async def webhook(request: Request):
                 return {"status": "ok"}
 
         return {"status": "ok"}
+        
+        @app.post("/shift/submit")
+async def shift_submit(request: Request):
+    data = await request.json()
+    name = data.get("name")
+    dates = data.get("dates")
+    period = data.get("period")
+    year = int(data.get("year"))
+    month = int(data.get("month"))
+
+    if not all([name, dates, period, year, month]):
+        return {"status": "error", "message": "パラメータ不足"}
+
+    try:
+        write_shift(name, dates, period, year, month)
+        return {"status": "success"}
+    except Exception as e:
+        print(f"[Error] スプレッドシート書き込み失敗: {e}")
+        return {"status": "error", "message": str(e)}
+
