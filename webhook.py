@@ -5,6 +5,7 @@ import random
 import asyncio
 import requests
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from sheets import write_shift
 
@@ -247,7 +248,6 @@ async def shift_submit(request: Request):
         print(f"[Error] スプレッドシート書き込み失敗: {e}")
         return {"status": "error", "message": str(e)}
 
-from fastapi.responses import FileResponse
 
 @app.get("/liff")
 async def liff_page():
