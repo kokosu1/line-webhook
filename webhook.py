@@ -214,6 +214,27 @@ async def webhook(request: Request):
                     send_shift_request("second")
                     send_line_reply(reply_token, "後半のシフト通知を送信しました！")
                     return {"status": "ok"}
+                    elif text.startswith("名前追加 "):
+                    new_name = text.replace("名前追加 ", "").strip()
+                    if new_name:
+                        from liff_names import add_name
+                        add_name(new_name)
+                        send_line_reply(reply_token, f"{new_name} を名前リストに追加しました！")
+                    else:
+                        send_line_reply(reply_token, "名前を入力してください。例：名前追加 田中")
+                    return {"status": "ok"}
+                elif text.startswith("名前削除 "):
+                    del_name = text.replace("名前削除 ", "").strip()
+                    if del_name:
+                        from liff_names import remove_name
+                        remove_name(del_name)
+                        send_line_reply(reply_token, f"{del_name} を名前リストから削除しました！")
+                    return {"status": "ok"}
+                elif text == "名前一覧":
+                    from liff_names import get_names
+                    names = get_names()
+                    send_line_reply(reply_token, "現在の名前リスト：\n" + "\n".join(names))
+                    return {"status": "ok"}
                     
             # じゃんけん
             if text == "じゃんけん":
