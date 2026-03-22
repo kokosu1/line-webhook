@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>シフト希望入力</title>
+  <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    h2 {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #666;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+```
+/* 名前選択 */
+#name-section .name-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.name-btn {
+  padding: 14px 8px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.name-btn.selected {
+  border-color: #06c755;
+  background: #e8faf0;
+  color: #06c755;
+  font-weight: bold;
+}
+
+/* 日付選択 */
+#date-section { display: none; }
+.selected-name-label {
+  text-align: center;
+  font-size: 15px;
+  font-weight: bold;
+  color: #06c755;
+  margin-bottom: 12px;
+}
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.date-btn {
+  padding: 12px 0;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.date-btn.selected {
+  border-color: #06c755;
+  background: #06c755;
+  color: white;
+  font-weight: bold;
+}
+.date-btn.holiday { color: #e53935; }
+.date-btn.selected.holiday { color: white; }
+
+/* ボタン */
+.btn {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.btn-primary {
+  background: #06c755;
+  color: white;
+}
+.btn-secondary {
+  background: #eee;
+  color: #555;
+}
+
+/* 完了画面 */
+#done-section {
+  display: none;
+  text-align: center;
+  padding-top: 60px;
+}
+.done-icon { font-size: 60px; margin-bottom: 16px; }
+.done-text { font-size: 16px; color: #333; }
+
+/* ローディング */
+#loading {
+  display: none;
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+```
+
+  </style>
+</head>
+<body>
+
+<!-- 名前選択 -->
+
+<div id="name-section">
+  <h2>👤 名前を選んでください</h2>
+  <div class="name-grid" id="name-grid"></div>
+</div>
+
+<!-- 日付選択 -->
+
+<div id="date-section">
+  <div class="selected-name-label" id="selected-name-label"></div>
+  <h2 id="date-title">出勤希望日を選んでください</h2>
+  <p class="subtitle">複数選択できます</p>
+  <div class="date-grid" id="date-grid"></div>
+  <button class="btn btn-primary" id="submit-btn">✅ 送信する</button>
+  <button class="btn btn-secondary" id="back-btn">← 名前を選び直す</button>
+</div>
+
+<!-- ローディング -->
+
+<div id="loading">送信中...</div>
+
+<!-- 完了 -->
+
+<div id="done-section">
+  <div class="done-icon">✅</div>
+  <p class="done-text" id="done-text"></p>
+</div>
+
+<script>
+  // =====================
+  // ★ここにスタッフの名前を入れてください★
+  const STAFF_NAMES = [
+    "田中", "鈴木", "佐藤", "山田", "伊藤",
+    "渡辺", "中村", "小林", "加藤", "吉田",
+    "山本", "松本", "井上", "木村", "林"
+    // 人数に合わせて編集してください
+  ];
+
+  // バックエンドのURL（RenderのURLに変更してください）
+  const API_URL = "https://あなたのRenderURL.onrender.com/shift/submit";
+  // =====================
+
+  let selectedName = null;
+  let selectedDates = new Set();
+  let period, year, month;
+
+  // URLパラメータ取得
+  const params = new URLSearchParams(window.location.search);
+  period = params.get("period");   // "first" or "second"
+  year = parseInt(params.get("year"));
+  month = parseInt(params.get("month"));
+
+  // 日付範囲
+  const startDay = period === "first" ? 1 : 16;
+  const endDay = period === "first" ? 15 : new Date(year, month, 0).getDate();
+
+  // 曜日チェック（土曜=6, 日曜=0）
+  function isHoliday(day) {
+    const d = new Date(year, month - 1, day).getDay();
+    return d === 0 || d === 6;
+  }
+
+  // 名前グリッド生成
+  const nameGrid = document.getElementById("name-grid");
+  STAFF_NAMES.forEach(name => {
+    const btn = document.createElement("button");
+    btn.className = "name-btn";
+    btn.textContent = name;
+    btn.onclick = () => {
+      document.querySelectorAll(".name-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      selectedName = name;
+      setTimeout(() => showDateSection(), 300);
+    };
+    nameGrid.appendChild(btn);
+  });
+
+  // 日付グリッド生成
+  const dateGrid = document.getElementById("date-grid");
+  for (let d = startDay; d <= endDay; d++) {
+    const btn = document.createElement("button");
+    btn.className = "date-btn" + (isHoliday(d) ? " holiday" : "");
+    btn.textContent = d;
+    btn.dataset.day = d;
+    btn.onclick = () => {
+      if (selectedDates.has(d)) {
+        selectedDates.delete(d);
+        btn.classList.remove("selected");
+      } else {
+        selectedDates.add(d);
+        btn.classList.add("selected");
+ }
+    };
+    dateGrid.appendChild(btn);
+  }
+
+  function showDateSection() {
+    document.getElementById("name-section").style.display = "none";
+    document.getElementById("date-section").style.display = "block";
+    document.getElementById("selected-name-label").textContent = `${selectedName} さん`;
+    const label = period === "first" ? `${month}月前半（1〜15日）` : `${month}月後半（16〜${endDay}日）`;
+    document.getElementById("date-title").textContent = `📅 ${label}`;
+  }
+
+  document.getElementById("back-btn").onclick = () => {
+    selectedDates.clear();
+    document.querySelectorAll(".date-btn").forEach(b => b.classList.remove("selected"));
+    document.getElementById("date-section").style.display = "none";
+    document.getElementById("name-section").style.display = "block";
+  };
+
+  document.getElementById("submit-btn").onclick = async () => {
+    if (selectedDates.size === 0) {
+      alert("出勤希望日を選んでください");
+      return;
+    }
+
+    document.getElementById("date-section").style.display = "none";
+    document.getElementById("loading").style.display = "block";
+
+    const body = {
+      name: selectedName,
+      dates: Array.from(selectedDates).sort((a, b) => a - b),
+      period: period,
+      year: year,
+      month: month
+    };
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("done-section").style.display = "block";
+
+      if (json.status === "success") {
+        const datesStr = Array.from(selectedDates).sort((a, b) => a - b).join(", ");
+        document.getElementById("done-text").textContent =
+          `${selectedName} さんの希望日（${datesStr}日）を送信しました！`;
+      } else {
+        document.getElementById("done-text").textContent = "エラーが発生しました。もう一度試してください。";
+      }
+    } catch (e) {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("done-section").style.display = "block";
+      document.getElementById("done-text").textContent = "通信エラーが発生しました。";
+    }
+  };
+
+  // LIFF初期化
+  liff.init({ liffId: "2009560202-FLkeeE5H" }).catch(err => {
+    console.error("LIFF init error:", err);
+  });
+</script>
+</body>
+</html>
