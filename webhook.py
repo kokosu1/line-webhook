@@ -200,7 +200,21 @@ async def webhook(request: Request):
                         return {"status": "ok"}
                 except Exception as e:
                     print("Error extracting PayPay data:", e)
-
+                    
+            # シフト手動送信（管理者のみ）
+            ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
+            if user_id == ADMIN_USER_ID:
+                if text == "シフト送信 前半":
+                    from scheduler import send_shift_request
+                    send_shift_request("first")
+                    send_line_reply(reply_token, "前半のシフト通知を送信しました！")
+                    return {"status": "ok"}
+                elif text == "シフト送信 後半":
+                    from scheduler import send_shift_request
+                    send_shift_request("second")
+                    send_line_reply(reply_token, "後半のシフト通知を送信しました！")
+                    return {"status": "ok"}
+                    
             # じゃんけん
             if text == "じゃんけん":
                 send_janken_buttons(reply_token)
