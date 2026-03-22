@@ -202,7 +202,7 @@ async def webhook(request: Request):
                     print("Error extracting PayPay data:", e)
                     
             # シフト手動送信（管理者のみ）
-            ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
+                ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
             if user_id == ADMIN_USER_ID:
                 if text == "シフト送信 前半":
                     from scheduler import send_shift_request
