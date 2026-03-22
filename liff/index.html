@@ -210,20 +210,6 @@ function renderNameGrid() {
     return d === 0 || d === 6;
   }
 
-  // 名前グリッド生成
-  const nameGrid = document.getElementById("name-grid");
-  STAFF_NAMES.forEach(name => {
-    const btn = document.createElement("button");
-    btn.className = "name-btn";
-    btn.textContent = name;
-    btn.onclick = () => {
-      document.querySelectorAll(".name-btn").forEach(b => b.classList.remove("selected"));
-      btn.classList.add("selected");
-      selectedName = name;
-      setTimeout(() => showDateSection(), 300);
-    };
-    nameGrid.appendChild(btn);
-  });
 
   // 日付グリッド生成
   const dateGrid = document.getElementById("date-grid");
