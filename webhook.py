@@ -2,7 +2,7 @@ import os
 import asyncio
 import requests
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from sheets import write_shift
 from sheet_image import sheet_to_image
@@ -15,6 +15,10 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 
 app = FastAPI()
+
+@app.api_route("/", methods=["GET", "HEAD"])
+async def health_check():
+    return JSONResponse({"status": "ok"})
 
 anonymous_waiting = set()
 anonymous_rooms = {}
