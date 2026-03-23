@@ -46,6 +46,10 @@ async def send_push_message(user_id, message):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, lambda: requests.post(
         "https://api.line.me/v2/bot/message/push", headers=headers, json=body))
+    
+@app.get("/")
+async def health_check():
+    return {"status": "ok"}
 
 # ===== Webhook =====
 
