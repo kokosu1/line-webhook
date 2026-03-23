@@ -232,9 +232,9 @@ async def webhook(request: Request):
                     return {"status": "ok"}
                 elif text == "名前一覧":
                         from liff_names import get_names
-                    names = get_names()
-                    send_line_reply(reply_token, "現在の名前リスト：\n" + "\n".join(names))
-                    return {"status": "ok"}
+                        names = get_names()
+                        send_line_reply(reply_token, "現在の名前リスト：\n" + "\n".join(names))
+                        return {"status": "ok"}
                 elif text.startswith("シフト画像 "):
                     sheet_name = text.replace("シフト画像 ", "").strip()
                         from sheet_image import sheet_to_image
