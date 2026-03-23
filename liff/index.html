@@ -163,7 +163,7 @@
   let STAFF_NAMES = [];
 
 async function loadNames() {
-    const res = await fetch("/staff-names");
+    const res = await fetch("https://line-webhook-5u4x.onrender.com/staff-names");
     const data = await res.json();
     STAFF_NAMES = data.names;
     renderNameGrid();
