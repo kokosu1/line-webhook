@@ -37,11 +37,17 @@ def sheet_to_image(sheet_name: str, output_path: str = "/tmp/shift.png"):
     img = Image.new("RGB", (img_w, img_h), "white")
     draw = ImageDraw.Draw(img)
 
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
+   try:
+        import urllib.request
+        font_path = "/tmp/NotoSansJP.ttf"
+        if not os.path.exists(font_path):
+            urllib.request.urlretrieve(
+                "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
+                font_path
+            )
+        font = ImageFont.truetype(font_path, 12)
     except:
         font = ImageFont.load_default()
-
     for r, row in enumerate(rows):
         for c, cell in enumerate(row):
             x = c * cell_w
