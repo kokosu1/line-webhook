@@ -268,6 +268,14 @@ async def webhook(request: Request):
                     else:
                         send_line_reply(reply_token, "シートが見つかりませんでした。")
                     return {"status": "ok"}
+                        # 日本語クイズ
+            if text in ["日本語クイズ", "クイズ"]:
+                send_line_reply(reply_token, start_quiz(user_id))
+                return {"status": "ok"}
+
+            if is_in_quiz(user_id):
+                send_line_reply(reply_token, answer_quiz(user_id, text))
+                return {"status": "ok"}
 
             # じゃんけん
             if text == "じゃんけん":
