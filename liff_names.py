@@ -17,21 +17,20 @@ SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")
 def get_names():
     try:
         service = get_service()
-        # 最初に見つかったシートのA列から名前を取得
         spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
-        first_sheet = spreadsheet["sheets"][0]["properties"]["title"]
         
-        result = service.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{first_sheet}!A:A"
-        ).execute()
-        
-        rows = result.get("values", [])
-        # 空白・ヘッダー除いて名前だけ取得
+        # 全シートからA列の名前を収集
         names = []
-        for row in rows[1:]:  # 1行目はヘッダーなのでスキップ
-            if row and row[0].strip():
-                names.append(row[0].strip())
+        for sheet in spreadsheet["sheets"]:
+            sheet_title = sheet["properties"]["title"]
+            result = service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{sheet_title}!A2:A"
+            ).execute()
+            rows = result.get("values", [])
+            for row in rows:
+                if row and row[0].strip() and row[0].strip() not in names:
+                    names.append(row[0].strip())
         return names
     except Exception as e:
         print(f"名前取得エラー: {e}")
