@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from sheets import write_shift
 from sheet_image import sheet_to_image
 from quiz import start_quiz, answer_quiz, is_in_quiz
+from paypay import handle_paypay
 
 load_dotenv()
 
@@ -97,6 +98,12 @@ async def webhook(request: Request):
                 else:
                     anonymous_waiting.add(user_id)
                     send_line_reply(reply_token, "マッチング相手を探しています。しばらくお待ちください。")
+                return {"status": "ok"}
+            
+            # ===== PayPay =====
+            paypay_result = handle_paypay(text)
+            if paypay_result:
+                send_line_reply(reply_token, paypay_result)
                 return {"status": "ok"}
 
             # ===== 管理者コマンド =====
