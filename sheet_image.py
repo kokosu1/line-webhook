@@ -1,5 +1,6 @@
 import os
 import json
+import urllib.request
 from PIL import Image, ImageDraw, ImageFont
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -15,19 +16,31 @@ def get_service():
 
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")
 
+def get_font(size=14):
+    font_path = "/tmp/NotoSans.otf"
+    if not os.path.exists(font_path):
+        try:
+            urllib.request.urlretrieve(
+                "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
+                font_path
+            )
+        except:
+            return ImageFont.load_default()
+    try:
+        return ImageFont.truetype(font_path, size)
+    except:
+        return ImageFont.load_default()
+
 def sheet_to_image(sheet_name: str, output_path: str = "/tmp/shift.png"):
     service = get_service()
-    
     result = service.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
         range=f"{sheet_name}"
     ).execute()
-    
     rows = result.get("values", [])
     if not rows:
         return None
 
-    # セルサイズ設定
     cell_w = 80
     cell_h = 30
     cols = max(len(row) for row in rows)
@@ -36,16 +49,8 @@ def sheet_to_image(sheet_name: str, output_path: str = "/tmp/shift.png"):
 
     img = Image.new("RGB", (img_w, img_h), "white")
     draw = ImageDraw.Draw(img)
+    font = get_font(12)
 
-   try:
-        import subprocess
-        subprocess.run(["apt-get", "install", "-y", "fonts-noto-cjk"], capture_output=True)
-        font = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 14)
-    except:
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 14)
-        except:
-            font = ImageFont.load_default()
     for r, row in enumerate(rows):
         for c, cell in enumerate(row):
             x = c * cell_w
