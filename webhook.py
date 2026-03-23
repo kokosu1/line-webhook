@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from sheets import write_shift
 from sheet_image import sheet_to_image
+from quiz import start_quiz, answer_quiz, is_in_quiz
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 
 load_dotenv()
