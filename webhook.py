@@ -238,21 +238,32 @@ async def webhook(request: Request):
                         return {"status": "ok"}
                 elif text.startswith("シフト画像 "):
                     sheet_name = text.replace("シフト画像 ", "").strip()
-                    path = sheet_to_image(sheet_name)
+                    path = sheet_to_image(sheet_name, "/tmp/shift.png")
                     if path:
+                        import cloudinary
+                        import cloudinary.uploader
+                        cloudinary.config(
+                            cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+                            api_key=os.getenv("CLOUDINARY_API_KEY"),
+                            api_secret=os.getenv("CLOUDINARY_API_SECRET")
+                        )
+                        result = cloudinary.uploader.upload(path)
+                        image_url = result.get("secure_url")
                         import requests as req
-                        headers = {
-                            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
-                            "Content-Type": "image/png"
+                        push_headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
                         }
-                        with open(path, "rb") as f:
-                            upload = req.post(
-                                "https://api-data.line.me/v2/bot/message/upload",
-                                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-                                files={"file": ("shift.png", f, "image/png")}
-                            )
-                        print("Upload response:", upload.status_code, upload.text)
-                        send_line_reply(reply_token, f"Upload結果: {upload.status_code} {upload.text}")
+                        push_body = {
+                            "to": os.getenv("LINE_GROUP_ID"),
+                            "messages": [{
+                                "type": "image",
+                                "originalContentUrl": image_url,
+                                "previewImageUrl": image_url
+                            }]
+                        }
+                        req.post("https://api.line.me/v2/bot/message/push", headers=push_headers, json=push_body)
+                        send_line_reply(reply_token, f"「{sheet_name}」の画像を送信しました！")
                     else:
                         send_line_reply(reply_token, "シートが見つかりませんでした。")
                     return {"status": "ok"}
