@@ -236,7 +236,7 @@ async def webhook(request: Request):
                         names = get_names()
                         send_line_reply(reply_token, "現在の名前リスト：\n" + "\n".join(names))
                         return {"status": "ok"}
-                                elif text.startswith("シフト画像 "):
+                elif text.startswith("シフト画像 "):
                     sheet_name = text.replace("シフト画像 ", "").strip()
                     path = sheet_to_image(sheet_name)
                     if path:
