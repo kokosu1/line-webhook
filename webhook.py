@@ -247,7 +247,7 @@ async def webhook(request: Request):
                         }
                         with open(path, "rb") as f:
                             upload = req.post(
-                                "https://api-data.line.me/v2/bot/message/upload/multipart",
+                                "https://api-data.line.me/v2/bot/message/upload",
                                 headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
                                 files={"file": ("shift.png", f, "image/png")}
                             )
