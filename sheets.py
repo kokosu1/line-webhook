@@ -78,17 +78,17 @@ def write_shift(name: str, dates: list[int], period: str, year: int, month: int)
     ).execute().get("values", [[]])[0]
 
     updates = []
-    for date in dates:
-        if date < start_day or date > end_day:
+    for day in range(start_day, end_day + 1):
+        col_label = str(day)
+        if col_label not in header:
             continue
-        col_label = str(date)
-        if col_label in header:
-            col_index = header.index(col_label) + 1  # 1-indexed
-            col_letter = _col_letter(col_index)
-            updates.append({
-                "range": f"{sheet_name}!{col_letter}{name_row}",
-                "values": [["○"]]
-            })
+        col_index = header.index(col_label) + 1
+        col_letter = _col_letter(col_index)
+        value = "18-22" if day in dates else "*"
+        updates.append({
+            "range": f"{sheet_name}!{col_letter}{name_row}",
+            "values": [[value]]
+        })
 
     if updates:
         service.spreadsheets().values().batchUpdate(
