@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from sheets import write_shift
+from sheet_image import sheet_to_image
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 
 load_dotenv()
