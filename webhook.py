@@ -236,39 +236,27 @@ async def webhook(request: Request):
                         names = get_names()
                         send_line_reply(reply_token, "現在の名前リスト：\n" + "\n".join(names))
                         return {"status": "ok"}
-                elif text.startswith("シフト画像 "):
+                                elif text.startswith("シフト画像 "):
                     sheet_name = text.replace("シフト画像 ", "").strip()
-                    import requests as req
                     path = sheet_to_image(sheet_name)
                     if path:
+                        import requests as req
+                        headers = {
+                            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+                            "Content-Type": "image/png"
+                        }
                         with open(path, "rb") as f:
-                            headers = {
-                                "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-                            }
-                            files = {"file": ("shift.png", f, "image/png")}
                             upload = req.post(
                                 "https://api-data.line.me/v2/bot/message/upload/multipart",
-                                headers=headers,
-                                files=files
+                                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                                files={"file": ("shift.png", f, "image/png")}
                             )
-                            message_id = upload.json().get("messageId")
-                        push_headers = {
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-                        }
-                        push_body = {
-                            "to": os.getenv("LINE_GROUP_ID"),
-                            "messages": [{
-                                "type": "image",
-                                "originalContentUrl": f"https://api-data.line.me/v2/bot/message/{message_id}/content",
-                                "previewImageUrl": f"https://api-data.line.me/v2/bot/message/{message_id}/content"
-                            }]
-                        }
-                        req.post("https://api.line.me/v2/bot/message/push", headers=push_headers, json=push_body)
-                        send_line_reply(reply_token, f"「{sheet_name}」の画像を送信しました！")
+                        print("Upload response:", upload.status_code, upload.text)
+                        send_line_reply(reply_token, f"Upload結果: {upload.status_code} {upload.text}")
                     else:
                         send_line_reply(reply_token, "シートが見つかりませんでした。")
                     return {"status": "ok"}
+
             # じゃんけん
             if text == "じゃんけん":
                 send_janken_buttons(reply_token)
