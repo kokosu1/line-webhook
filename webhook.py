@@ -238,7 +238,6 @@ async def webhook(request: Request):
                         return {"status": "ok"}
                 elif text.startswith("シフト画像 "):
                     sheet_name = text.replace("シフト画像 ", "").strip()
-                        from sheet_image import sheet_to_image
                     import requests as req
                     path = sheet_to_image(sheet_name)
                     if path:
