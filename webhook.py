@@ -26,31 +26,23 @@ anonymous_rooms = {}
 # ===== LINE送信系 =====
 
 def send_line_reply(token, message):
-“””
-message は str または dict を受け取る
-dict の場合: {“text”: “…”, “quick_reply”: {…}}
-“””
 headers = {
 “Content-Type”: “application/json”,
 “Authorization”: f”Bearer {LINE_CHANNEL_ACCESS_TOKEN}”
 }
-
-```
 if isinstance(message, dict):
-    msg_obj = {"type": "text", "text": message["text"]}
-    if "quick_reply" in message:
-        msg_obj["quickReply"] = message["quick_reply"]
+msg_obj = {“type”: “text”, “text”: message[“text”]}
+if “quick_reply” in message:
+msg_obj[“quickReply”] = message[“quick_reply”]
 else:
-    msg_obj = {"type": "text", "text": message}
-
+msg_obj = {“type”: “text”, “text”: message}
 body = {
-    "replyToken": token,
-    "messages": [msg_obj]
+“replyToken”: token,
+“messages”: [msg_obj]
 }
-res = requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+res = requests.post(“https://api.line.me/v2/bot/message/reply”, headers=headers, json=body)
 if res.status_code != 200:
-    print(f"Reply error: {res.status_code} - {res.text}")
-```
+print(f”Reply error: {res.status_code} - {res.text}”)
 
 async def send_push_message(user_id, message):
 headers = {
@@ -79,8 +71,8 @@ for event in events:
     group_id = event["source"].get("groupId")
 
     if group_id:
-        print(f"👥 グループID: {group_id}")
-    print(f"👤 ユーザーID: {user_id}")
+        print(f"グループID: {group_id}")
+    print(f"ユーザーID: {user_id}")
 
     if event["type"] == "message" and event["message"]["type"] == "text":
         text = event["message"]["text"].strip()
