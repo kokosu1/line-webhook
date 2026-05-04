@@ -8,9 +8,9 @@ import os
 # 設定読み込み
 # ======================
 
-TOKEN = config["token"]
-GUILD_ID = int(config["guild_id"])
-ADMIN_ROLE_ID = int(config["admin_role_id"])
+TOKEN = os.getenv("TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID"))
+ADMIN_ROLE_ID = int(os.getenv("ADMIN_ROLE_ID"))
 
 PRODUCTS_FILE = "products.json"
 
