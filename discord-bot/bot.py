@@ -22,8 +22,6 @@ def load_products():
     if not os.path.exists(PRODUCTS_FILE):
         return []
 
-    with open(PRODUCTS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def save_products(products):
